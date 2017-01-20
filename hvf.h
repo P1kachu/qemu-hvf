@@ -15,6 +15,8 @@ extern bool hvf_allowed;
 # define TYPE_HVF_ACCEL ACCEL_CLASS_NAME("hvf")
 # define hvf_enabled() (hvf_allowed)
 
+hv_return_t hvf_cpu_exec(hv_vcpuid_t vcpu);
+
 #else
 
 # define hvf_enabled() (0)
