@@ -1418,32 +1418,19 @@ static void qemu_tcg_init_vcpu(CPUState *cpu)
     }
 }
 
-static void qemu_kvm_start_vcpu(CPUState *cpu)
+
+static void qemu_accel_init_vcpu(CPUState *cpu,
+                const char *accel_name,
+                void *(*thread_create_callback)(void*))
 {
     char thread_name[VCPU_THREAD_NAME_SIZE];
 
     cpu->thread = g_malloc0(sizeof(QemuThread));
     cpu->halt_cond = g_malloc0(sizeof(QemuCond));
     qemu_cond_init(cpu->halt_cond);
-    snprintf(thread_name, VCPU_THREAD_NAME_SIZE, "CPU %d/KVM",
-             cpu->cpu_index);
-    qemu_thread_create(cpu->thread, thread_name, qemu_kvm_cpu_thread_fn,
-                       cpu, QEMU_THREAD_JOINABLE);
-    while (!cpu->created) {
-        qemu_cond_wait(&qemu_cpu_cond, &qemu_global_mutex);
-    }
-}
-
-static void qemu_dummy_start_vcpu(CPUState *cpu)
-{
-    char thread_name[VCPU_THREAD_NAME_SIZE];
-
-    cpu->thread = g_malloc0(sizeof(QemuThread));
-    cpu->halt_cond = g_malloc0(sizeof(QemuCond));
-    qemu_cond_init(cpu->halt_cond);
-    snprintf(thread_name, VCPU_THREAD_NAME_SIZE, "CPU %d/DUMMY",
-             cpu->cpu_index);
-    qemu_thread_create(cpu->thread, thread_name, qemu_dummy_cpu_thread_fn, cpu,
+    snprintf(thread_name, VCPU_THREAD_NAME_SIZE, "CPU %d/%s",
+             cpu->cpu_index, accel_name);
+    qemu_thread_create(cpu->thread, thread_name, thread_create_callback, cpu,
                        QEMU_THREAD_JOINABLE);
     while (!cpu->created) {
         qemu_cond_wait(&qemu_cpu_cond, &qemu_global_mutex);
@@ -1467,11 +1454,11 @@ void qemu_init_vcpu(CPUState *cpu)
     }
 
     if (kvm_enabled()) {
-        qemu_kvm_start_vcpu(cpu);
+        qemu_accel_init_vcpu(cpu, "KVM", qemu_kvm_cpu_thread_fn);
     } else if (tcg_enabled()) {
         qemu_tcg_init_vcpu(cpu);
     } else {
-        qemu_dummy_start_vcpu(cpu);
+        qemu_accel_init_vcpu(cpu, "DUMMY", qemu_dummy_cpu_thread_fn);
     }
 }
 
