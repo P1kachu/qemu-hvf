@@ -51,6 +51,11 @@
 #include "qemu/compatfd.h"
 #endif
 
+//#ifdef _MACOS
+#include <Hypervisor/hv.h>
+#include "hvf.h"
+//#endif
+
 #ifdef CONFIG_LINUX
 
 #include <sys/prctl.h>
@@ -1055,6 +1060,43 @@ static void *qemu_dummy_cpu_thread_fn(void *arg)
 #endif
 }
 
+static void *qemu_hvf_cpu_thread_fn(void *arg)
+{
+    CPUState *cpu = (CPUState *)arg;
+
+    rcu_register_thread();
+
+    qemu_mutex_lock_iothread();
+    qemu_thread_get_self(cpu->thread);
+    cpu->thread_id = qemu_get_thread_id();
+    cpu->can_do_io = 1;
+
+    hv_vcpuid_t vcpu;
+    hv_return_t ret = hv_vcpu_create(&vcpu, HV_VCPU_DEFAULT);
+
+    if (ret) {
+        fprintf(stderr, "HVF: hv_vcpu_create failed (%x)\n", ret);
+        exit(1);
+    }
+
+    /* signal CPU creation */
+    cpu->created = true;
+    qemu_cond_signal(&qemu_cpu_cond);
+    current_cpu = cpu;
+
+    do {
+            // CPU RUN
+            ret = hvf_cpu_exec(vcpu);
+    } while (!ret);
+
+    // DESTROY VCPU
+    cpu->created = false;
+    qemu_cond_signal(&qemu_cpu_cond);
+    qemu_mutex_unlock_iothread();
+
+    return NULL;
+}
+
 static int64_t tcg_get_icount_limit(void)
 {
     int64_t deadline;
@@ -1457,6 +1499,8 @@ void qemu_init_vcpu(CPUState *cpu)
         qemu_accel_init_vcpu(cpu, "KVM", qemu_kvm_cpu_thread_fn);
     } else if (tcg_enabled()) {
         qemu_tcg_init_vcpu(cpu);
+    } else if (hvf_enabled()) {
+        qemu_accel_init_vcpu(cpu, "HVF", qemu_hvf_cpu_thread_fn);
     } else {
         qemu_accel_init_vcpu(cpu, "DUMMY", qemu_dummy_cpu_thread_fn);
     }
