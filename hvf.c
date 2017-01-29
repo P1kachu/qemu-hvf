@@ -2,9 +2,10 @@
 
 #include <Hypervisor/hv.h>
 
-#include "sysemu/accel.h"
-#include "qemu/module.h"
+#include "cpu.h"
 #include "hvf.h"
+#include "qemu/module.h"
+#include "sysemu/accel.h"
 
 bool hvf_allowed = true;
 
@@ -94,6 +95,75 @@ static const char *exit_reason_str(uint64_t reason)
 #undef S
 }
 
+static hv_return_t hvf_getput_reg(hv_vcpuid_t vcpu,
+                                  int vmcs_offset,
+                                  uint64_t *general_register,
+                                  int set)
+{
+        if (set == HVF_SET_REGS) {
+                return hv_vcpu_write_register(vcpu, vmcs_offset, *general_register);
+        } else {
+                return hv_vcpu_read_register(vcpu, vmcs_offset, general_register);
+        }
+}
+
+#if 0
+static hv_return_t hvf_get_general_registers(hv_vcpuid_t vcpu,
+                                             struct hvf_general_regs *regs)
+{
+        hv_return_t ret = 0;
+
+        ret |= hvf_getput_reg(vcpu, HV_X86_RIP, &regs->HV_X86_RIP, HVF_GET_REGS);
+        ret |= hvf_getput_reg(vcpu, HV_X86_RFLAGS, &regs->HV_X86_RFLAGS, HVF_GET_REGS);
+        ret |= hvf_getput_reg(vcpu, HV_X86_RAX, &regs->HV_X86_RAX, HVF_GET_REGS);
+        ret |= hvf_getput_reg(vcpu, HV_X86_RBX, &regs->HV_X86_RBX, HVF_GET_REGS);
+        ret |= hvf_getput_reg(vcpu, HV_X86_RCX, &regs->HV_X86_RCX, HVF_GET_REGS);
+        ret |= hvf_getput_reg(vcpu, HV_X86_RDX, &regs->HV_X86_RDX, HVF_GET_REGS);
+        ret |= hvf_getput_reg(vcpu, HV_X86_RSI, &regs->HV_X86_RSI, HVF_GET_REGS);
+        ret |= hvf_getput_reg(vcpu, HV_X86_RDI, &regs->HV_X86_RDI, HVF_GET_REGS);
+        ret |= hvf_getput_reg(vcpu, HV_X86_RSP, &regs->HV_X86_RSP, HVF_GET_REGS);
+        ret |= hvf_getput_reg(vcpu, HV_X86_RBP, &regs->HV_X86_RBP, HVF_GET_REGS);
+        ret |= hvf_getput_reg(vcpu, HV_X86_R8, &regs->HV_X86_R8, HVF_GET_REGS);
+        ret |= hvf_getput_reg(vcpu, HV_X86_R9, &regs->HV_X86_R9, HVF_GET_REGS);
+        ret |= hvf_getput_reg(vcpu, HV_X86_R10, &regs->HV_X86_R10, HVF_GET_REGS);
+        ret |= hvf_getput_reg(vcpu, HV_X86_R11, &regs->HV_X86_R11, HVF_GET_REGS);
+        ret |= hvf_getput_reg(vcpu, HV_X86_R12, &regs->HV_X86_R12, HVF_GET_REGS);
+        ret |= hvf_getput_reg(vcpu, HV_X86_R13, &regs->HV_X86_R13, HVF_GET_REGS);
+        ret |= hvf_getput_reg(vcpu, HV_X86_R14, &regs->HV_X86_R14, HVF_GET_REGS);
+        ret |= hvf_getput_reg(vcpu, HV_X86_R15, &regs->HV_X86_R15, HVF_GET_REGS);
+
+        return ret;
+}
+#endif
+
+static hv_return_t hvf_put_init_regs(CPUState *cpu)
+{
+        X86CPU *x86_cpu = X86_CPU(cpu);
+        CPUX86State *env = &x86_cpu->env;
+        hv_vcpuid_t vcpuid = cpu->vcpuid;
+        hv_return_t ret = 0;
+
+        ret |= hvf_getput_reg(vcpuid, HV_X86_RIP, &env->eip, HVF_SET_REGS);
+        ret |= hvf_getput_reg(vcpuid, HV_X86_RFLAGS, &env->eflags, HVF_SET_REGS);
+        ret |= hvf_getput_reg(vcpuid, HV_X86_RAX, &env->regs[R_EAX], HVF_SET_REGS);
+        ret |= hvf_getput_reg(vcpuid, HV_X86_RBX, &env->regs[R_EBX], HVF_SET_REGS);
+        ret |= hvf_getput_reg(vcpuid, HV_X86_RCX, &env->regs[R_ECX], HVF_SET_REGS);
+        ret |= hvf_getput_reg(vcpuid, HV_X86_RDX, &env->regs[R_EDX], HVF_SET_REGS);
+        ret |= hvf_getput_reg(vcpuid, HV_X86_RSI, &env->regs[R_ESI], HVF_SET_REGS);
+        ret |= hvf_getput_reg(vcpuid, HV_X86_RDI, &env->regs[R_EDI], HVF_SET_REGS);
+        ret |= hvf_getput_reg(vcpuid, HV_X86_RSP, &env->regs[R_ESP], HVF_SET_REGS);
+        ret |= hvf_getput_reg(vcpuid, HV_X86_RBP, &env->regs[R_EBP], HVF_SET_REGS);
+        ret |= hvf_getput_reg(vcpuid, HV_X86_R8, &env->regs[8], HVF_SET_REGS);
+        ret |= hvf_getput_reg(vcpuid, HV_X86_R9, &env->regs[9], HVF_SET_REGS);
+        ret |= hvf_getput_reg(vcpuid, HV_X86_R10, &env->regs[10], HVF_SET_REGS);
+        ret |= hvf_getput_reg(vcpuid, HV_X86_R11, &env->regs[11], HVF_SET_REGS);
+        ret |= hvf_getput_reg(vcpuid, HV_X86_R12, &env->regs[12], HVF_SET_REGS);
+        ret |= hvf_getput_reg(vcpuid, HV_X86_R13, &env->regs[13], HVF_SET_REGS);
+        ret |= hvf_getput_reg(vcpuid, HV_X86_R14, &env->regs[14], HVF_SET_REGS);
+        ret |= hvf_getput_reg(vcpuid, HV_X86_R15, &env->regs[15], HVF_SET_REGS);
+
+    return ret;
+}
 hv_return_t hvf_vcpu_init(CPUState *cpu)
 {
         printf("HVF: hvf_vcpu_init %d\n", cpu->vcpuid);
@@ -102,6 +172,12 @@ hv_return_t hvf_vcpu_init(CPUState *cpu)
 
         if (ret) {
                 fprintf(stderr, "HVF: hv_vcpu_create failed (%x)\n", ret);
+                exit(1);
+        }
+
+        ret = hvf_put_init_regs(cpu);
+        if (ret) {
+                fprintf(stderr, "HVF: hvf_put_init_regs failed (%x)\n", ret);
                 exit(1);
         }
 
