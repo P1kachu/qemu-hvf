@@ -21,6 +21,11 @@
 #define QEMU_CPU_H
 
 #include "hw/qdev-core.h"
+
+#ifdef _MACOS
+#include <Hypervisor/hv.h>
+#endif
+
 #include "disas/bfd.h"
 #include "exec/hwaddr.h"
 #include "exec/memattrs.h"
@@ -387,11 +392,16 @@ struct CPUState {
      */
     bool throttle_thread_scheduled;
 
+#ifdef _MACOS
+    hv_vcpuid_t vcpuid;
+#endif
+
     /* Note that this is accessed at the start of every TB via a negative
        offset from AREG0.  Leave this field at the end so as to make the
        (absolute value) offset as small as possible.  This reduces code
        size, especially for hosts without large memory offsets.  */
     uint32_t tcg_exit_req;
+
 };
 
 QTAILQ_HEAD(CPUTailQ, CPUState);

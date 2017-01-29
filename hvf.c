@@ -94,19 +94,33 @@ static const char *exit_reason_str(uint64_t reason)
 #undef S
 }
 
-hv_return_t hvf_cpu_exec(hv_vcpuid_t vcpu)
+hv_return_t hvf_vcpu_init(CPUState *cpu)
 {
-        printf("HVF: hvf_cpu_exec() --> ");
+        printf("HVF: hvf_vcpu_init %d\n", cpu->vcpuid);
 
-        uint64_t exit_reason = hvf_get_exit_reason(vcpu);
+        hv_return_t ret = hv_vcpu_create(&cpu->vcpuid, HV_VCPU_DEFAULT);
+
+        if (ret) {
+                fprintf(stderr, "HVF: hv_vcpu_create failed (%x)\n", ret);
+                exit(1);
+        }
+
+        return 0;
+}
+
+hv_return_t hvf_vcpu_exec(CPUState *cpu)
+{
+        fprintf(stderr, "HVF: hvf_vcpu_exec() -- ");
+
+        uint64_t exit_reason = hvf_get_exit_reason(cpu->vcpuid);
 
         switch(exit_reason) {
                 default:
                         fprintf(stderr,
-                                "HVF: Unhandled exit reason (%lld: %s)\n",
+                                "Unhandled exit reason (%lld: %s)\n",
                                 exit_reason,
                                 exit_reason_str(exit_reason & 0xffff));
-                        exit(1);
+                        return 1;
         }
         return 0;
 }
