@@ -51,10 +51,10 @@
 #include "qemu/compatfd.h"
 #endif
 
-//#ifdef _MACOS
+#ifdef _MACOS
 #include <Hypervisor/hv.h>
 #include "hvf.h"
-//#endif
+#endif
 
 #ifdef CONFIG_LINUX
 
@@ -1062,6 +1062,7 @@ static void *qemu_dummy_cpu_thread_fn(void *arg)
 
 static void *qemu_hvf_cpu_thread_fn(void *arg)
 {
+#ifdef _MACOS
     CPUState *cpu = (CPUState *)arg;
 
     rcu_register_thread();
@@ -1071,13 +1072,7 @@ static void *qemu_hvf_cpu_thread_fn(void *arg)
     cpu->thread_id = qemu_get_thread_id();
     cpu->can_do_io = 1;
 
-    hv_vcpuid_t vcpu;
-    hv_return_t ret = hv_vcpu_create(&vcpu, HV_VCPU_DEFAULT);
-
-    if (ret) {
-        fprintf(stderr, "HVF: hv_vcpu_create failed (%x)\n", ret);
-        exit(1);
-    }
+    hv_return_t ret = hvf_vcpu_init(cpu);
 
     /* signal CPU creation */
     cpu->created = true;
@@ -1085,9 +1080,10 @@ static void *qemu_hvf_cpu_thread_fn(void *arg)
     current_cpu = cpu;
 
     do {
-            // CPU RUN
-            ret = hvf_cpu_exec(vcpu);
+            ret = hvf_vcpu_exec(cpu);
     } while (!ret);
+
+    printf("HVF: hvf_cpu_exec loop stopped with %d\n", ret);
 
     // DESTROY VCPU
     cpu->created = false;
@@ -1095,6 +1091,10 @@ static void *qemu_hvf_cpu_thread_fn(void *arg)
     qemu_mutex_unlock_iothread();
 
     return NULL;
+#else /* _MACOS */
+    fprintf(stderr, "HVF is only supported under macOS\n");
+    exit(1);
+#endif
 }
 
 static int64_t tcg_get_icount_limit(void)
