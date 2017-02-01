@@ -113,28 +113,66 @@ static hv_return_t hvf_get_general_registers(hv_vcpuid_t vcpu,
 {
         hv_return_t ret = 0;
 
-        ret |= hvf_getput_reg(vcpu, HV_X86_RIP, &regs->HV_X86_RIP, HVF_GET_REGS);
-        ret |= hvf_getput_reg(vcpu, HV_X86_RFLAGS, &regs->HV_X86_RFLAGS, HVF_GET_REGS);
-        ret |= hvf_getput_reg(vcpu, HV_X86_RAX, &regs->HV_X86_RAX, HVF_GET_REGS);
-        ret |= hvf_getput_reg(vcpu, HV_X86_RBX, &regs->HV_X86_RBX, HVF_GET_REGS);
-        ret |= hvf_getput_reg(vcpu, HV_X86_RCX, &regs->HV_X86_RCX, HVF_GET_REGS);
-        ret |= hvf_getput_reg(vcpu, HV_X86_RDX, &regs->HV_X86_RDX, HVF_GET_REGS);
-        ret |= hvf_getput_reg(vcpu, HV_X86_RSI, &regs->HV_X86_RSI, HVF_GET_REGS);
-        ret |= hvf_getput_reg(vcpu, HV_X86_RDI, &regs->HV_X86_RDI, HVF_GET_REGS);
-        ret |= hvf_getput_reg(vcpu, HV_X86_RSP, &regs->HV_X86_RSP, HVF_GET_REGS);
-        ret |= hvf_getput_reg(vcpu, HV_X86_RBP, &regs->HV_X86_RBP, HVF_GET_REGS);
-        ret |= hvf_getput_reg(vcpu, HV_X86_R8, &regs->HV_X86_R8, HVF_GET_REGS);
-        ret |= hvf_getput_reg(vcpu, HV_X86_R9, &regs->HV_X86_R9, HVF_GET_REGS);
-        ret |= hvf_getput_reg(vcpu, HV_X86_R10, &regs->HV_X86_R10, HVF_GET_REGS);
-        ret |= hvf_getput_reg(vcpu, HV_X86_R11, &regs->HV_X86_R11, HVF_GET_REGS);
-        ret |= hvf_getput_reg(vcpu, HV_X86_R12, &regs->HV_X86_R12, HVF_GET_REGS);
-        ret |= hvf_getput_reg(vcpu, HV_X86_R13, &regs->HV_X86_R13, HVF_GET_REGS);
-        ret |= hvf_getput_reg(vcpu, HV_X86_R14, &regs->HV_X86_R14, HVF_GET_REGS);
-        ret |= hvf_getput_reg(vcpu, HV_X86_R15, &regs->HV_X86_R15, HVF_GET_REGS);
+        ret |= hvf_getput_reg(vcpu, HV_X86_RIP, &regs->hv_x86_rip, HVF_GET_REGS);
+        ret |= hvf_getput_reg(vcpu, HV_X86_RFLAGS, &regs->hv_x86_rflags, HVF_GET_REGS);
+        ret |= hvf_getput_reg(vcpu, HV_X86_RAX, &regs->hv_x86_rax, HVF_GET_REGS);
+        ret |= hvf_getput_reg(vcpu, HV_X86_RBX, &regs->hv_x86_rbx, HVF_GET_REGS);
+        ret |= hvf_getput_reg(vcpu, HV_X86_RCX, &regs->hv_x86_rcx, HVF_GET_REGS);
+        ret |= hvf_getput_reg(vcpu, HV_X86_RDX, &regs->hv_x86_rdx, HVF_GET_REGS);
+        ret |= hvf_getput_reg(vcpu, HV_X86_RSI, &regs->hv_x86_rsi, HVF_GET_REGS);
+        ret |= hvf_getput_reg(vcpu, HV_X86_RDI, &regs->hv_x86_rdi, HVF_GET_REGS);
+        ret |= hvf_getput_reg(vcpu, HV_X86_RSP, &regs->hv_x86_rsp, HVF_GET_REGS);
+        ret |= hvf_getput_reg(vcpu, HV_X86_RBP, &regs->hv_x86_rbp, HVF_GET_REGS);
+        ret |= hvf_getput_reg(vcpu, HV_X86_R8, &regs->hv_x86_r8, HVF_GET_REGS);
+        ret |= hvf_getput_reg(vcpu, HV_X86_R9, &regs->hv_x86_r9, HVF_GET_REGS);
+        ret |= hvf_getput_reg(vcpu, HV_X86_R10, &regs->hv_x86_r10, HVF_GET_REGS);
+        ret |= hvf_getput_reg(vcpu, HV_X86_R11, &regs->hv_x86_r11, HVF_GET_REGS);
+        ret |= hvf_getput_reg(vcpu, HV_X86_R12, &regs->hv_x86_r12, HVF_GET_REGS);
+        ret |= hvf_getput_reg(vcpu, HV_X86_R13, &regs->hv_x86_r13, HVF_GET_REGS);
+        ret |= hvf_getput_reg(vcpu, HV_X86_R14, &regs->hv_x86_r14, HVF_GET_REGS);
+        ret |= hvf_getput_reg(vcpu, HV_X86_R15, &regs->hv_x86_r15, HVF_GET_REGS);
 
         return ret;
 }
 #endif
+
+static hv_return_t hvf_put_init_sregs(CPUState *cpu)
+{
+        CPUX86State *env = &X86_CPU(cpu)->env;
+        //struct hvf_sregs sregs;
+        hv_vcpuid_t vcpuid = cpu->vcpuid;
+
+#if 0
+        if (env->interrupt_injected >= 0) {
+                sregs.interrupt_bitmap[env->interrupt_injected / 64] |=
+                        (uint64_t)1 << (env->interrupt_injected % 64);
+        }
+        sregs.apic_base = cpu_get_apic_base(cpu->apic_state);
+        uint64_t cr8 = cpu_get_apic_tpr(cpu->apic_state);
+#endif
+
+
+        hv_return_t ret = 0;
+
+        SET_SEG(vcpuid, CS, env->segs[R_CS]);
+        SET_SEG(vcpuid, DS, env->segs[R_DS]);
+        SET_SEG(vcpuid, ES, env->segs[R_ES]);
+        SET_SEG(vcpuid, FS, env->segs[R_FS]);
+        SET_SEG(vcpuid, GS, env->segs[R_GS]);
+        SET_SEG(vcpuid, SS, env->segs[R_SS]);
+        ret |= hv_vmx_vcpu_write_vmcs(vcpuid, VMCS_GUEST_IDTR_BASE, env->idt.base);
+        ret |= hv_vmx_vcpu_write_vmcs(vcpuid, VMCS_GUEST_IDTR_LIMIT, env->idt.limit);
+        ret |= hv_vmx_vcpu_write_vmcs(vcpuid, VMCS_GUEST_GDTR_BASE, env->gdt.base);
+        ret |= hv_vmx_vcpu_write_vmcs(vcpuid, VMCS_GUEST_GDTR_LIMIT, env->gdt.limit);
+        ret |= hv_vmx_vcpu_write_vmcs(vcpuid, VMCS_GUEST_CR0, env->cr[0]);
+        ret |= hv_vmx_vcpu_write_vmcs(vcpuid, VMCS_GUEST_CR3, env->cr[3]);
+        ret |= hv_vmx_vcpu_write_vmcs(vcpuid, VMCS_GUEST_CR4, env->cr[4]);
+        //ret |= hv_vmx_vcpu_write_vmcs(vcpuid, VMCS_GUEST_CR2, env->cr[2]);
+        //ret |= hv_vmx_vcpu_write_vmcs(vcpuid, VMCS_GUEST_CR8, cr8);
+        ret |= hv_vmx_vcpu_write_vmcs(vcpuid, VMCS_GUEST_IA32_EFER, env->efer);
+        return ret;
+
+}
 
 static hv_return_t hvf_put_init_regs(CPUState *cpu)
 {
@@ -181,6 +219,11 @@ hv_return_t hvf_vcpu_init(CPUState *cpu)
                 exit(1);
         }
 
+        ret = hvf_put_init_sregs(cpu);
+        if (ret) {
+                fprintf(stderr, "HVF: hvf_put_init_sregs failed (%x)\n", ret);
+                exit(1);
+        }
         return 0;
 }
 
@@ -191,6 +234,10 @@ hv_return_t hvf_vcpu_exec(CPUState *cpu)
         uint64_t exit_reason = hvf_get_exit_reason(cpu->vcpuid);
 
         switch(exit_reason) {
+                case VMX_REASON_EXC_NMI:
+                        fprintf(stderr, "NMI\n");
+                        return 1;
+                        break;
                 default:
                         fprintf(stderr,
                                 "Unhandled exit reason (%lld: %s)\n",
