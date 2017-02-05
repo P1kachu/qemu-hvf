@@ -38,14 +38,17 @@ extern bool hvf_allowed;
 # define TYPE_HVF_ACCEL ACCEL_CLASS_NAME("hvf")
 # define hvf_enabled() (hvf_allowed)
 
-#define HVF_GET_REGS 0
-#define HVF_SET_REGS 1
+#define HVF_GET_REGS    0
+#define HVF_SET_REGS    1
+#define HVF_MSR_DISABLE 0
+#define HVF_MSR_ENABLE  1
 
 #define SET_SEG(vcpu, name, seg)                                                \
         do {                                                                    \
                 hv_vmx_vcpu_write_vmcs(vcpu, VMCS_GUEST_ ## name ## _BASE, seg.base);\
                 hv_vmx_vcpu_write_vmcs(vcpu, VMCS_GUEST_ ## name ## _LIMIT, seg.limit);\
                 hv_vmx_vcpu_write_vmcs(vcpu, VMCS_GUEST_ ## name ## _AR, seg.flags);    \
+                printf("Setting " #name " Base: 0x%llx - Limit: 0x%x - flags: 0x%x\n", seg.base, seg.limit, seg.flags);\
         } while (0)                                                            \
 
 

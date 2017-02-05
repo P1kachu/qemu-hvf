@@ -202,28 +202,56 @@ static hv_return_t hvf_put_init_regs(CPUState *cpu)
 
     return ret;
 }
+
+static hv_return_t hvf_init_msr(CPUState *cpu)
+{
+        hv_return_t ret = 0;
+        hv_vcpuid_t vcpuid = cpu->vcpuid;
+
+#ifdef TMP_DONTUNDERSTAND
+        ret |= hv_vcpu_enable_native_msr(vcpuid, MSR_GSBASE, HVF_MSR_ENABLE);
+        ret |= hv_vcpu_enable_native_msr(vcpuid, MSR_FSBASE, HVF_MSR_ENABLE);
+        ret |= hv_vcpu_enable_native_msr(vcpuid, MSR_IA32_TSC, HVF_MSR_ENABLE);
+        ret |= hv_vcpu_enable_native_msr(vcpuid, MSR_TSC_AUX, HVF_MSR_ENABLE);
+        //MSR_PAT?
+#endif
+
+        ret |= hv_vcpu_enable_native_msr(vcpuid, MSR_IA32_SYSENTER_CS, HVF_MSR_ENABLE);
+        ret |= hv_vcpu_enable_native_msr(vcpuid, MSR_IA32_SYSENTER_EIP, HVF_MSR_ENABLE);
+        ret |= hv_vcpu_enable_native_msr(vcpuid, MSR_IA32_SYSENTER_ESP, HVF_MSR_ENABLE);
+
+        // ifdef TARGET_X86_64 ?
+        ret |= hv_vcpu_enable_native_msr(vcpuid, MSR_CSTAR, HVF_MSR_ENABLE);
+        ret |= hv_vcpu_enable_native_msr(vcpuid, MSR_KERNELGSBASE, HVF_MSR_ENABLE);
+        ret |= hv_vcpu_enable_native_msr(vcpuid, MSR_FMASK, HVF_MSR_ENABLE);
+        ret |= hv_vcpu_enable_native_msr(vcpuid, MSR_LSTAR, HVF_MSR_ENABLE);
+        ret |= hv_vcpu_enable_native_msr(vcpuid, MSR_STAR, HVF_MSR_ENABLE);
+
+        return ret;
+}
+
+#define EXIT_IF_FAIL(func) \
+        if (ret) {         \
+                fprintf(stderr, "HVF: " #func  " failed (%x)\n", ret); \
+                exit(1); \
+        }
+
 hv_return_t hvf_vcpu_init(CPUState *cpu)
 {
         printf("HVF: hvf_vcpu_init %d\n", cpu->vcpuid);
 
         hv_return_t ret = hv_vcpu_create(&cpu->vcpuid, HV_VCPU_DEFAULT);
-
-        if (ret) {
-                fprintf(stderr, "HVF: hv_vcpu_create failed (%x)\n", ret);
-                exit(1);
-        }
+        EXIT_IF_FAIL(hv_vcpu_create);
 
         ret = hvf_put_init_regs(cpu);
-        if (ret) {
-                fprintf(stderr, "HVF: hvf_put_init_regs failed (%x)\n", ret);
-                exit(1);
-        }
+        EXIT_IF_FAIL(hvf_put_init_regs);
 
         ret = hvf_put_init_sregs(cpu);
-        if (ret) {
-                fprintf(stderr, "HVF: hvf_put_init_sregs failed (%x)\n", ret);
-                exit(1);
-        }
+        EXIT_IF_FAIL(hvf_put_init_sregs);
+
+        ret = hvf_init_msr(cpu);
+        EXIT_IF_FAIL(hvf_init_msr);
+
         return 0;
 }
 
@@ -232,11 +260,13 @@ hv_return_t hvf_vcpu_exec(CPUState *cpu)
         fprintf(stderr, "HVF: hvf_vcpu_exec() -- ");
 
         uint64_t exit_reason = hvf_get_exit_reason(cpu->vcpuid);
+        static int dummy_flag = 0;
 
         switch(exit_reason) {
                 case VMX_REASON_EXC_NMI:
                         fprintf(stderr, "NMI\n");
-                        return 1;
+                        if (dummy_flag) return 1;
+                        dummy_flag = 1;
                         break;
                 default:
                         fprintf(stderr,
