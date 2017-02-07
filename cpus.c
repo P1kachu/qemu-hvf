@@ -1074,7 +1074,6 @@ static void *qemu_hvf_cpu_thread_fn(void *arg)
 
     hv_return_t ret = hvf_vcpu_init(cpu);
 
-    /* signal CPU creation */
     cpu->created = true;
     qemu_cond_signal(&qemu_cpu_cond);
     current_cpu = cpu;
@@ -1085,7 +1084,6 @@ static void *qemu_hvf_cpu_thread_fn(void *arg)
 
     printf("HVF: hvf_cpu_exec loop stopped with %d\n", ret);
 
-    // DESTROY VCPU
     cpu->created = false;
     qemu_cond_signal(&qemu_cpu_cond);
     qemu_mutex_unlock_iothread();

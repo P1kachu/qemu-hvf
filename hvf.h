@@ -43,12 +43,23 @@ extern bool hvf_allowed;
 #define HVF_MSR_DISABLE 0
 #define HVF_MSR_ENABLE  1
 
+#define DEBUG_HVF
+
+#ifdef DEBUG_HVF
+#define DPRINTF(fmt, ...) \
+    do { fprintf(stderr, fmt, ## __VA_ARGS__); } while (0)
+#else
+#define DPRINTF(fmt, ...) \
+    do { } while (0)
+#endif
+
+
 #define SET_SEG(vcpu, name, seg)                                                \
         do {                                                                    \
-                hv_vmx_vcpu_write_vmcs(vcpu, VMCS_GUEST_ ## name ## _BASE, seg.base);\
-                hv_vmx_vcpu_write_vmcs(vcpu, VMCS_GUEST_ ## name ## _LIMIT, seg.limit);\
-                hv_vmx_vcpu_write_vmcs(vcpu, VMCS_GUEST_ ## name ## _AR, seg.flags);    \
-                printf("Setting " #name " Base: 0x%llx - Limit: 0x%x - flags: 0x%x\n", seg.base, seg.limit, seg.flags);\
+                ret |= hv_vmx_vcpu_write_vmcs(vcpu, VMCS_GUEST_ ## name ## _BASE, seg.base);\
+                ret |= hv_vmx_vcpu_write_vmcs(vcpu, VMCS_GUEST_ ## name ## _LIMIT, seg.limit);\
+                ret |= hv_vmx_vcpu_write_vmcs(vcpu, VMCS_GUEST_ ## name ## _AR, seg.flags);    \
+                DPRINTF("HVF: Setting " #name " (Base: 0x%llx - Limit: 0x%x - flags: 0x%x)\n", seg.base, seg.limit, seg.flags);\
         } while (0)                                                            \
 
 
