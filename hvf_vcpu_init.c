@@ -48,12 +48,6 @@ static hv_return_t hvf_get_general_registers(hv_vcpuid_t vcpu,
 }
 #endif
 
-#define EXIT_IF_FAIL(func) \
-        if (ret) {         \
-                fprintf(stderr, "HVF: " #func  " failed (%x)\n", ret); \
-                exit(1); \
-        }
-
 static hv_return_t hvf_put_init_sregs(CPUState *cpu)
 {
         CPUX86State *env = &X86_CPU(cpu)->env;
