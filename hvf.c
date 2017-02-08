@@ -106,6 +106,8 @@ static int hvf_init(MachineState *ms)
                 exit(1);
         }
 
+        hvf_memory_init(ms);
+
         return 0;
 }
 

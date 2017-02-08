@@ -69,6 +69,7 @@ extern bool hvf_allowed;
 
 hv_return_t hvf_vcpu_exec(CPUState *cpu);
 hv_return_t hvf_vcpu_init(CPUState *cpu);
+hv_return_t hvf_memory_init(MachineState *ms);
 
 #else
 
