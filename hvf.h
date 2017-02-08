@@ -43,16 +43,20 @@ extern bool hvf_allowed;
 #define HVF_MSR_DISABLE 0
 #define HVF_MSR_ENABLE  1
 
-#define DEBUG_HVF
+#define EXIT_IF_FAIL(func) \
+        if (ret) {         \
+                fprintf(stderr, "HVF: " #func  " failed (%x)\n", ret); \
+                exit(1); \
+        }
 
+#define DEBUG_HVF
 #ifdef DEBUG_HVF
 #define DPRINTF(fmt, ...) \
-    do { fprintf(stderr, fmt, ## __VA_ARGS__); } while (0)
+        do { fprintf(stderr, fmt, ## __VA_ARGS__); } while (0)
 #else
 #define DPRINTF(fmt, ...) \
-    do { } while (0)
+        do { } while (0)
 #endif
-
 
 #define SET_SEG(vcpu, name, seg)                                                \
         do {                                                                    \

@@ -105,29 +105,6 @@ static int hvf_init(MachineState *ms)
                 fprintf(stderr, "HVF: hv_vm_create failed with %x\n", ret);
                 exit(1);
         }
-#define DEBUG 1
-#ifdef DEBUG
-#define VM_START_ADDRESS 0x0
-#define VM_MEM_SIZE      (1024 * 1024)
-#define PERM_RWX (HV_MEMORY_READ | HV_MEMORY_WRITE | HV_MEMORY_EXEC)
-
-        //TODO: remove valloc
-        void *vm_mem = valloc(VM_MEM_SIZE);
-        if (!vm_mem) {
-                fprintf(stderr, "HVF: vm memory allocation failed\n");
-                exit(1);
-        }
-
-        ret = hv_vm_map(vm_mem, VM_START_ADDRESS, VM_MEM_SIZE, PERM_RWX);
-        if (ret) {
-                fprintf(stderr, "HVF: vm_vm_map failed with %x\n", ret);
-                exit(1);
-        }
-
-        memcpy(vm_mem, "\xB8\x78\x56\x34\x12\xf4", 6); // mov eax 0x12345678
-        DPRINTF("HVF: Test code written\n");
-
-#endif
 
         return 0;
 }
