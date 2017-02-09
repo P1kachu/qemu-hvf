@@ -22,7 +22,7 @@
 
 #include "hw/qdev-core.h"
 
-#ifdef _MACOS
+#ifdef CONFIG_HVF
 #include <Hypervisor/hv.h>
 #endif
 
@@ -392,7 +392,7 @@ struct CPUState {
      */
     bool throttle_thread_scheduled;
 
-#ifdef _MACOS
+#ifdef CONFIG_HVF
     hv_vcpuid_t vcpuid;
 #endif
 

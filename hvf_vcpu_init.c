@@ -3,7 +3,7 @@
 #include <Hypervisor/hv.h>
 
 #include "cpu.h"
-#include "hvf.h"
+#include "sysemu/hvf.h"
 #include "qemu/module.h"
 #include "sysemu/accel.h"
 

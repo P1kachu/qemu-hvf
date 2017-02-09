@@ -1,6 +1,8 @@
 #ifndef HVF_H
 #define HVF_H
 
+#ifdef CONFIG_HVF
+
 #include "qom/cpu.h"
 
 struct hvf_general_regs {
@@ -29,8 +31,6 @@ typedef struct HVFState {
 
 extern bool hvf_allowed;
 
-#ifdef CONFIG_HVF
-
 # include <Hypervisor/hv.h>
 # include <Hypervisor/hv_vmx.h>
 # include <Hypervisor/hv_arch_vmx.h>
@@ -58,12 +58,18 @@ extern bool hvf_allowed;
         do { } while (0)
 #endif
 
-#define SET_SEG(vcpu, name, seg)                                                \
-        do {                                                                    \
-                ret |= hv_vmx_vcpu_write_vmcs(vcpu, VMCS_GUEST_ ## name ## _BASE, seg.base);\
-                ret |= hv_vmx_vcpu_write_vmcs(vcpu, VMCS_GUEST_ ## name ## _LIMIT, seg.limit);\
-                ret |= hv_vmx_vcpu_write_vmcs(vcpu, VMCS_GUEST_ ## name ## _AR, seg.flags);    \
-                DPRINTF("HVF: Setting " #name " (Base: 0x%llx - Limit: 0x%x - flags: 0x%x)\n", seg.base, seg.limit, seg.flags);\
+#define SET_SEG(vcpu, name, seg)                                            \
+        do {                                                                \
+                ret |= hv_vmx_vcpu_write_vmcs(vcpu,                         \
+                                              VMCS_GUEST_ ## name ## _BASE, \
+                                              seg.base);                    \
+                ret |= hv_vmx_vcpu_write_vmcs(vcpu,                         \
+                                              VMCS_GUEST_ ## name ## _LIMIT,\
+                                              seg.limit);                   \
+                ret |= hv_vmx_vcpu_write_vmcs(vcpu,                         \
+                                              VMCS_GUEST_ ## name ## _AR,   \
+                                              seg.flags);                   \
+                DPRINTF("HVF: " #name " (Base: 0x%llx - Lmt: 0x%x - ar: 0x%x)\n", seg.base, seg.limit, seg.flags);\
         } while (0)                                                            \
 
 

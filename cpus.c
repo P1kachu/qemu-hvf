@@ -34,6 +34,7 @@
 #include "exec/gdbstub.h"
 #include "sysemu/dma.h"
 #include "sysemu/kvm.h"
+#include "sysemu/hvf.h"
 #include "qmp-commands.h"
 #include "exec/exec-all.h"
 
@@ -49,11 +50,6 @@
 
 #ifndef _WIN32
 #include "qemu/compatfd.h"
-#endif
-
-#ifdef _MACOS
-#include <Hypervisor/hv.h>
-#include "hvf.h"
 #endif
 
 #ifdef CONFIG_LINUX
@@ -1062,7 +1058,7 @@ static void *qemu_dummy_cpu_thread_fn(void *arg)
 
 static void *qemu_hvf_cpu_thread_fn(void *arg)
 {
-#ifdef _MACOS
+#ifdef CONFIG_HVF
     CPUState *cpu = (CPUState *)arg;
 
     rcu_register_thread();
@@ -1089,7 +1085,7 @@ static void *qemu_hvf_cpu_thread_fn(void *arg)
     qemu_mutex_unlock_iothread();
 
     return NULL;
-#else /* _MACOS */
+#else /* CONFIG_HVF */
     fprintf(stderr, "HVF is only supported under macOS\n");
     exit(1);
 #endif

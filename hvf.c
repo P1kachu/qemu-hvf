@@ -3,9 +3,10 @@
 #include <Hypervisor/hv.h>
 
 #include "cpu.h"
-#include "hvf.h"
 #include "qemu/module.h"
 #include "sysemu/accel.h"
+#include "sysemu/hvf.h"
+
 
 bool hvf_allowed = true;
 
@@ -125,6 +126,7 @@ hv_return_t hvf_vcpu_exec(CPUState *cpu)
                                                VMCS_RO_VMEXIT_IRQ_INFO,
                                                 &intr_info);
                         DPRINTF("INTR_INFO: %llx\n", intr_info);
+                        return 1; //break;
                 default:
                         fprintf(stderr,
                                 "Unhandled exit reason (%lld: %s)\n",
