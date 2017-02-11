@@ -69,13 +69,13 @@ extern bool hvf_allowed;
                 ret |= hv_vmx_vcpu_write_vmcs(vcpu,                         \
                                               VMCS_GUEST_ ## name ## _AR,   \
                                               seg.flags);                   \
-                DPRINTF("HVF: " #name " (Base: 0x%llx - Lmt: 0x%x - ar: 0x%x)\n", seg.base, seg.limit, seg.flags);\
         } while (0)                                                            \
 
 
 hv_return_t hvf_vcpu_exec(CPUState *cpu);
 hv_return_t hvf_vcpu_init(CPUState *cpu);
 hv_return_t hvf_memory_init(MachineState *ms);
+void hvf_debug(CPUState *cpu);
 
 #else
 

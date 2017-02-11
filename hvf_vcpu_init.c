@@ -48,6 +48,7 @@ static hv_return_t hvf_get_general_registers(hv_vcpuid_t vcpu,
 }
 #endif
 
+
 static hv_return_t hvf_put_init_sregs(CPUState *cpu)
 {
         CPUX86State *env = &X86_CPU(cpu)->env;
@@ -83,6 +84,49 @@ static hv_return_t hvf_put_init_sregs(CPUState *cpu)
         DPRINTF("HVF: Special registers initialized\n");
 
         return ret;
+
+}
+
+#define PRINT_VALUE(name) printf("  --> " #name ": 0x%llx\n", (unsigned long long)env->name);
+void hvf_debug(CPUState *cpu)
+{
+        CPUX86State *env = &X86_CPU(cpu)->env;
+
+        printf("----\n");
+
+        PRINT_VALUE(idt.base);
+        PRINT_VALUE(idt.limit);
+        PRINT_VALUE(idt.flags);
+        PRINT_VALUE(gdt.base);
+        PRINT_VALUE(gdt.limit);
+        PRINT_VALUE(gdt.flags);
+        PRINT_VALUE(cr[0]);
+        PRINT_VALUE(cr[3]);
+        PRINT_VALUE(cr[4]);
+        PRINT_VALUE(efer);
+
+        PRINT_VALUE(eip);
+        PRINT_VALUE(eflags);
+        PRINT_VALUE(regs[R_EAX]);
+        PRINT_VALUE(regs[R_EBX]);
+        PRINT_VALUE(regs[R_ECX]);
+        PRINT_VALUE(regs[R_EDX]);
+        PRINT_VALUE(regs[R_ESI]);
+        PRINT_VALUE(regs[R_EDI]);
+        PRINT_VALUE(regs[R_ESP]);
+        PRINT_VALUE(regs[R_EBP]);
+        PRINT_VALUE(regs[8]);
+        PRINT_VALUE(regs[9]);
+        PRINT_VALUE(regs[10]);
+        PRINT_VALUE(regs[11]);
+        PRINT_VALUE(regs[12]);
+        PRINT_VALUE(regs[13]);
+        PRINT_VALUE(regs[14]);
+        PRINT_VALUE(regs[15]);
+
+        printf("----\n");
+
+
 
 }
 
@@ -153,6 +197,9 @@ hv_return_t hvf_vcpu_init(CPUState *cpu)
 
         hv_return_t ret = hv_vcpu_create(&cpu->vcpuid, HV_VCPU_DEFAULT);
         EXIT_IF_FAIL(hv_vcpu_create);
+
+        // DEBUG
+        //cpu_reset(cpu);
 
         ret = hvf_put_init_regs(cpu);
         EXIT_IF_FAIL(hvf_put_init_regs);

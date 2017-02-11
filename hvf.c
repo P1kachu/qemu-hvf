@@ -126,7 +126,8 @@ hv_return_t hvf_vcpu_exec(CPUState *cpu)
                                                VMCS_RO_VMEXIT_IRQ_INFO,
                                                 &intr_info);
                         DPRINTF("INTR_INFO: %llx\n", intr_info);
-                        return 1; //break;
+                        //break;
+                        return 1;
                 default:
                         fprintf(stderr,
                                 "Unhandled exit reason (%lld: %s)\n",

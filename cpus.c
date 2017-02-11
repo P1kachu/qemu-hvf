@@ -1069,13 +1069,18 @@ static void *qemu_hvf_cpu_thread_fn(void *arg)
     cpu->can_do_io = 1;
 
     hv_return_t ret = hvf_vcpu_init(cpu);
+    hvf_debug(cpu);
 
     cpu->created = true;
     qemu_cond_signal(&qemu_cpu_cond);
     current_cpu = cpu;
 
     do {
-            ret = hvf_vcpu_exec(cpu);
+            if (cpu_can_run(cpu)) {
+                    ret = hvf_vcpu_exec(cpu);
+            }
+            qemu_kvm_wait_io_event(cpu);
+            hvf_debug(cpu);
     } while (!ret);
 
     printf("HVF: hvf_cpu_exec loop stopped with %d\n", ret);
