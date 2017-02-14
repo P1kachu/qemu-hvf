@@ -1058,7 +1058,6 @@ static void *qemu_dummy_cpu_thread_fn(void *arg)
 
 static void *qemu_hvf_cpu_thread_fn(void *arg)
 {
-#ifdef CONFIG_HVF
     CPUState *cpu = (CPUState *)arg;
 
     rcu_register_thread();
@@ -1069,18 +1068,29 @@ static void *qemu_hvf_cpu_thread_fn(void *arg)
     cpu->can_do_io = 1;
 
     hv_return_t ret = hvf_vcpu_init(cpu);
-    hvf_debug(cpu);
 
     cpu->created = true;
-    qemu_cond_signal(&qemu_cpu_cond);
     current_cpu = cpu;
+
+    qemu_cond_signal(&qemu_cpu_cond);
 
     do {
             if (cpu_can_run(cpu)) {
+                    printf("CPU can run\n");
                     ret = hvf_vcpu_exec(cpu);
+                    hvf_debug(cpu);
+                    if (ret == EXCP_DEBUG) {
+                            cpu_handle_guest_debug(cpu);
+                            ret = 0;
+                    }
             }
-            qemu_kvm_wait_io_event(cpu);
-            hvf_debug(cpu);
+
+            while (cpu_thread_is_idle(cpu)) {
+                    qemu_cond_wait(cpu->halt_cond, &qemu_global_mutex);
+            }
+            // qemu_kvm_eat_signals(cpu);
+            qemu_wait_io_event_common(cpu);
+
     } while (!ret);
 
     printf("HVF: hvf_cpu_exec loop stopped with %d\n", ret);
@@ -1090,10 +1100,6 @@ static void *qemu_hvf_cpu_thread_fn(void *arg)
     qemu_mutex_unlock_iothread();
 
     return NULL;
-#else /* CONFIG_HVF */
-    fprintf(stderr, "HVF is only supported under macOS\n");
-    exit(1);
-#endif
 }
 
 static int64_t tcg_get_icount_limit(void)

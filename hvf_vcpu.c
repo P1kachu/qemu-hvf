@@ -49,7 +49,7 @@ static hv_return_t hvf_get_general_registers(hv_vcpuid_t vcpu,
 #endif
 
 
-static hv_return_t hvf_put_init_sregs(CPUState *cpu)
+static hv_return_t hvf_put_sregs(CPUState *cpu)
 {
         CPUX86State *env = &X86_CPU(cpu)->env;
         hv_vcpuid_t vcpuid = cpu->vcpuid;
@@ -80,8 +80,6 @@ static hv_return_t hvf_put_init_sregs(CPUState *cpu)
         sregs.apic_base = cpu_get_apic_base(cpu->apic_state);
         uint64_t cr8 = cpu_get_apic_tpr(cpu->apic_state);
 #endif
-
-        DPRINTF("HVF: Special registers initialized\n");
 
         return ret;
 
@@ -130,7 +128,7 @@ void hvf_debug(CPUState *cpu)
 
 }
 
-static hv_return_t hvf_put_init_regs(CPUState *cpu)
+static hv_return_t hvf_put_regs(CPUState *cpu)
 {
         X86CPU *x86_cpu = X86_CPU(cpu);
         CPUX86State *env = &x86_cpu->env;
@@ -155,8 +153,6 @@ static hv_return_t hvf_put_init_regs(CPUState *cpu)
         ret |= hvf_getput_reg(vcpuid, HV_X86_R13, &env->regs[13], HVF_SET_REGS);
         ret |= hvf_getput_reg(vcpuid, HV_X86_R14, &env->regs[14], HVF_SET_REGS);
         ret |= hvf_getput_reg(vcpuid, HV_X86_R15, &env->regs[15], HVF_SET_REGS);
-
-        DPRINTF("HVF: Registers initialized\n");
 
         return ret;
 }
@@ -191,6 +187,19 @@ static hv_return_t hvf_init_msr(CPUState *cpu)
         return ret;
 }
 
+hv_return_t hvf_update_state(CPUState *cpu)
+{
+        hv_return_t ret = 0;
+
+        ret = hvf_put_regs(cpu);
+        EXIT_IF_FAIL(hvf_put_regs);
+
+        ret = hvf_put_sregs(cpu);
+        EXIT_IF_FAIL(hvf_put_sregs);
+
+        return ret;
+}
+
 hv_return_t hvf_vcpu_init(CPUState *cpu)
 {
         DPRINTF("HVF: hvf_vcpu_init on CPU %d\n", cpu->vcpuid);
@@ -201,15 +210,11 @@ hv_return_t hvf_vcpu_init(CPUState *cpu)
         // DEBUG
         //cpu_reset(cpu);
 
-        ret = hvf_put_init_regs(cpu);
-        EXIT_IF_FAIL(hvf_put_init_regs);
-
-        ret = hvf_put_init_sregs(cpu);
-        EXIT_IF_FAIL(hvf_put_init_sregs);
-
         ret = hvf_init_msr(cpu);
         EXIT_IF_FAIL(hvf_init_msr);
 
-        return 0;
+        ret = hvf_update_state(cpu);
+
+        return ret;
 }
 

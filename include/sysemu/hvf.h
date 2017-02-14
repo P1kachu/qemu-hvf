@@ -5,32 +5,6 @@
 
 #include "qom/cpu.h"
 
-struct hvf_general_regs {
-        uint64_t hv_x86_rip;
-        uint64_t hv_x86_rflags;
-        uint64_t hv_x86_rax;
-        uint64_t hv_x86_rbx;
-        uint64_t hv_x86_rcx;
-        uint64_t hv_x86_rdx;
-        uint64_t hv_x86_rsi;
-        uint64_t hv_x86_rdi;
-        uint64_t hv_x86_rsp;
-        uint64_t hv_x86_rbp;
-        uint64_t hv_x86_r8;
-        uint64_t hv_x86_r9;
-        uint64_t hv_x86_r10;
-        uint64_t hv_x86_r11;
-        uint64_t hv_x86_r12;
-        uint64_t hv_x86_r13;
-        uint64_t hv_x86_r14;
-        uint64_t hv_x86_r15;
-};
-
-typedef struct HVFState {
-} HVFState;
-
-extern bool hvf_allowed;
-
 # include <Hypervisor/hv.h>
 # include <Hypervisor/hv_vmx.h>
 # include <Hypervisor/hv_arch_vmx.h>
@@ -71,10 +45,12 @@ extern bool hvf_allowed;
                                               seg.flags);                   \
         } while (0)                                                            \
 
+extern bool hvf_allowed;
 
 hv_return_t hvf_vcpu_exec(CPUState *cpu);
 hv_return_t hvf_vcpu_init(CPUState *cpu);
 hv_return_t hvf_memory_init(MachineState *ms);
+hv_return_t hvf_update_state(CPUState *cpu);
 void hvf_debug(CPUState *cpu);
 
 #else

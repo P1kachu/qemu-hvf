@@ -4,6 +4,7 @@
 
 #include "cpu.h"
 #include "qemu/module.h"
+#include "qemu/main-loop.h"
 #include "sysemu/accel.h"
 #include "sysemu/hvf.h"
 
@@ -114,9 +115,22 @@ static int hvf_init(MachineState *ms)
 
 hv_return_t hvf_vcpu_exec(CPUState *cpu)
 {
+        uint64_t intr_info;
+        hv_return_t ret = 0;
+
         DPRINTF("HVF: hvf_vcpu_exec() -- ");
 
-        uint64_t intr_info;
+        qemu_mutex_unlock_iothread();
+
+        hvf_update_state(cpu);
+
+        ret = hv_vcpu_run(cpu->vcpuid);
+
+        if (ret) {
+                fprintf(stderr, "HVF: hv_vcpu_run failed with %x\n", ret);
+                exit(1);
+        }
+
         uint64_t exit_reason = hvf_get_exit_reason(cpu->vcpuid);
 
         switch(exit_reason) {
@@ -126,16 +140,18 @@ hv_return_t hvf_vcpu_exec(CPUState *cpu)
                                                VMCS_RO_VMEXIT_IRQ_INFO,
                                                 &intr_info);
                         DPRINTF("INTR_INFO: %llx\n", intr_info);
-                        //break;
-                        return 1;
+                        break;
                 default:
                         fprintf(stderr,
-                                "Unhandled exit reason (%lld: %s)\n",
+                                "Unhandled exit reason (%llx: %s)\n",
                                 exit_reason,
                                 exit_reason_str(exit_reason & 0xffff));
-                        return 1;
+                        ret = 1;
         }
-        return 0;
+
+        qemu_mutex_lock_iothread();
+
+        return ret;
 }
 
 static void hvf_accel_class_init(ObjectClass *oc, void *data)
@@ -150,7 +166,7 @@ static const TypeInfo hvf_accel_type = {
     .name = TYPE_HVF_ACCEL,
     .parent = TYPE_ACCEL,
     .class_init = hvf_accel_class_init,
-    .instance_size = sizeof(HVFState),
+//    .instance_size = sizeof(HVFState),
 };
 
 static void hvf_type_init(void)
