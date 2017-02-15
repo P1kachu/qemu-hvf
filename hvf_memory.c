@@ -48,7 +48,8 @@ static void hvf_region_add(MemoryListener *listener,
         // TODO: Correct access rights (exploitation heaven right now)
         hv_return_t ret;
         ret = hv_vm_map(ram, start_addr, size, flags);
-        DPRINTF("HVF: \033[32;1mhvf_region_add\033[0m(0x%llx bytes at 0x%llx) - ram: %lx - flags: %x ", size, start_addr, (uint64_t)ram, flags);
+        DPRINTF("HVF: \033[32;1mhvf_region_add\033[0m(0x%016llx - 0x%016llx) - ram: %lx - flags: %x ",
+                        start_addr, start_addr + size, (uint64_t)ram, flags);
         DPRINTF(" = %x\n", ret);
 }
 
@@ -57,7 +58,7 @@ static void hvf_region_del(MemoryListener *listener,
 {
         uint64_t size = int128_get64(section->size);
         uint64_t start_addr = section->offset_within_address_space;
-        DPRINTF("HVF: \033[31;1mhvf_region_delete\033[0m(0x%llx bytes at 0x%llx)\n", size, start_addr);
+        DPRINTF("HVF: \033[31;1mhvf_region_del\033[0m(0x%016llx - 0x%016llx)\n", start_addr, size + start_addr);
 }
 
 hv_return_t hvf_memory_init(MachineState *ms)

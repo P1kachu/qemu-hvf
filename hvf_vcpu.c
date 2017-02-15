@@ -72,6 +72,8 @@ static hv_return_t hvf_put_sregs(CPUState *cpu)
         ret |= hv_vmx_vcpu_write_vmcs(vcpuid, VMCS_GUEST_CR4, env->cr[4]);
         ret |= hv_vmx_vcpu_write_vmcs(vcpuid, VMCS_GUEST_IA32_EFER, env->efer);
 
+//#define CPU_BASED_CTRL (CPU_BASED_HLT | CPU_BASED_CR8_LOAD | CPU_BASED_CR8_STORE)
+//        ret |= hv_vmx_vcpu_write_vmcs(vcpuid, VMCS_CTRL_CPU_BASED, CPU_BASED_CTRL);
 #if 0
         if (env->interrupt_injected >= 0) {
                 sregs.interrupt_bitmap[env->interrupt_injected / 64] |=
