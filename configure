@@ -4772,6 +4772,17 @@ if test "$libnfs" != "no" ; then
   fi
 fi
 
+#########################################
+# HVF probe
+cat > $TMPC <<EOF
+#include <Hypervisor/hv_types.h>
+int main(void) { return sizeof(hv_vm_options_t); }
+EOF
+hvf=no
+if compile_prog "" ""; then
+  hvf=yes
+fi
+
 # Now we've finished running tests it's OK to add -Werror to the compiler flags
 if test "$werror" = "yes"; then
     QEMU_CFLAGS="-Werror $QEMU_CFLAGS"
@@ -5112,6 +5123,7 @@ echo "tcmalloc support  $tcmalloc"
 echo "jemalloc support  $jemalloc"
 echo "avx2 optimization $avx2_opt"
 echo "replication support $replication"
+echo "HVF support       $hvf"
 
 if test "$sdl_too_old" = "yes"; then
 echo "-> Your SDL version is too old - please upgrade to have SDL support"
@@ -5721,6 +5733,10 @@ if test "$have_af_vsock" = "yes" ; then
   echo "CONFIG_AF_VSOCK=y" >> $config_host_mak
 fi
 
+if test "$hvf" = "yes" ; then
+  echo "CONFIG_HVF=y" >> $config_host_mak
+fi
+
 # Hold two types of flag:
 #   CONFIG_THREAD_SETNAME_BYTHREAD  - we've got a way of setting the name on
 #                                     a thread we have a handle to
@@ -6050,7 +6066,6 @@ case "$target_name" in
       fi
     fi
 esac
-echo "CONFIG_HVF=y" >> $config_target_mak
 if test "$target_bigendian" = "yes" ; then
   echo "TARGET_WORDS_BIGENDIAN=y" >> $config_target_mak
 fi
