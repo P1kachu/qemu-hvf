@@ -12,10 +12,12 @@
 # define TYPE_HVF_ACCEL ACCEL_CLASS_NAME("hvf")
 # define hvf_enabled() (hvf_allowed)
 
-#define HVF_GET_REGS    0
-#define HVF_SET_REGS    1
-#define HVF_MSR_DISABLE 0
-#define HVF_MSR_ENABLE  1
+#define HVF_GET_REGS      0
+#define HVF_SET_REGS      1
+#define HVF_MSR_DISABLE   0
+#define HVF_MSR_ENABLE    1
+#define HVF_REGION_DELETE 0
+#define HVF_REGION_ADD    1
 
 #define EXIT_IF_FAIL(func) \
         if (ret) {         \
@@ -42,8 +44,8 @@
                                               seg.limit);                   \
                 ret |= hv_vmx_vcpu_write_vmcs(vcpu,                         \
                                               VMCS_GUEST_ ## name ## _AR,   \
-                                              seg.flags);                   \
-        } while (0)                                                            \
+                                              seg.flags >> 8);              \
+        } while (0)                                                         \
 
 extern bool hvf_allowed;
 
