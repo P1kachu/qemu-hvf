@@ -1077,9 +1077,9 @@ static void *qemu_hvf_cpu_thread_fn(void *arg)
     do {
             if (cpu_can_run(cpu)) {
                     printf("CPU can run\n");
-                    ret = hvf_vcpu_exec(cpu);
                     hvf_debug(cpu);
-                    abort(); // DEBUG
+                    ret = hvf_vcpu_exec(cpu);
+
                     if (ret == EXCP_DEBUG) {
                             cpu_handle_guest_debug(cpu);
                             ret = 0;

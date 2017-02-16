@@ -131,7 +131,7 @@ hv_return_t hvf_vcpu_exec(CPUState *cpu)
                 exit(1);
         }
 
-        uint64_t exit_reason = hvf_get_exit_reason(cpu->vcpuid);
+        uint64_t exit_reason = hvf_get_exit_reason(cpu->vcpuid) & 0xffff;
 
         switch(exit_reason) {
                 case VMX_REASON_EXC_NMI:
@@ -141,6 +141,13 @@ hv_return_t hvf_vcpu_exec(CPUState *cpu)
                                                 &intr_info);
                         DPRINTF("INTR_INFO: %llx\n", intr_info);
                         break;
+                case VMX_REASON_VMENTRY_GUEST:
+                        fprintf(stderr,
+                                "Invalid guest state (%s)\n",
+                                exit_reason_str(exit_reason & 0xffff));
+                        abort();
+                        break;
+
                 default:
                         fprintf(stderr,
                                 "Unhandled exit reason (%llx: %s)\n",
