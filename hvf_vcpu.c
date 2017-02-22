@@ -19,35 +19,147 @@ static hv_return_t hvf_getput_reg(hv_vcpuid_t vcpu,
         }
 }
 
-#if 0
-static hv_return_t hvf_get_general_registers(hv_vcpuid_t vcpu,
-                                             struct hvf_general_regs *regs)
+void hvf_debug(CPUState *cpu)
 {
+        CPUX86State *env = &X86_CPU(cpu)->env;
+        hv_vcpuid_t vcpu = cpu->vcpuid;
+
+        printf("-- VCPU %d --\n", vcpu);
+
+        uint64_t tmp, ret;
+
+#define check_value(name, vmcs_field)                                       \
+        printf("  " #name ":  0x%llx", tmp);                                \
+        if (ret) printf("FAILED WITH %llx\n", ret);                         \
+        else if (tmp != env->name)                                          \
+            printf(" \033[33;1m(should be 0x%llx)\033[0m",                  \
+                   (uint64_t) env->name);                                   \
+        printf("\n");
+
+#define PRINT_VALUE(name, vmcs_field)                                       \
+        ret = hv_vmx_vcpu_read_vmcs(vcpu, vmcs_field, &tmp);                \
+        check_value(name, vmcs_field)
+
+#define PRINT_REG(name, vmcs_field)                                         \
+        ret = hv_vcpu_read_register(vcpu, vmcs_field, &tmp);                \
+        check_value(name, vmcs_field)
+
+        PRINT_VALUE(segs[R_CS].selector,  VMCS_GUEST_CS);
+        PRINT_VALUE(segs[R_CS].base,      VMCS_GUEST_CS_BASE);
+        PRINT_VALUE(segs[R_CS].limit,     VMCS_GUEST_CS_LIMIT);
+        PRINT_VALUE(segs[R_CS].flags,     VMCS_GUEST_CS_AR);
+        PRINT_VALUE(segs[R_DS].selector,  VMCS_GUEST_DS);
+        PRINT_VALUE(segs[R_DS].base,      VMCS_GUEST_DS_BASE);
+        PRINT_VALUE(segs[R_DS].limit,     VMCS_GUEST_DS_LIMIT);
+        PRINT_VALUE(segs[R_DS].flags,     VMCS_GUEST_DS_AR);
+        PRINT_VALUE(segs[R_ES].selector,  VMCS_GUEST_ES);
+        PRINT_VALUE(segs[R_ES].base,      VMCS_GUEST_ES_BASE);
+        PRINT_VALUE(segs[R_ES].limit,     VMCS_GUEST_ES_LIMIT);
+        PRINT_VALUE(segs[R_ES].flags,     VMCS_GUEST_ES_AR);
+        PRINT_VALUE(segs[R_FS].selector,  VMCS_GUEST_FS);
+        PRINT_VALUE(segs[R_FS].base,      VMCS_GUEST_FS_BASE);
+        PRINT_VALUE(segs[R_FS].limit,     VMCS_GUEST_FS_LIMIT);
+        PRINT_VALUE(segs[R_FS].flags,     VMCS_GUEST_FS_AR);
+        PRINT_VALUE(segs[R_GS].selector,  VMCS_GUEST_GS);
+        PRINT_VALUE(segs[R_GS].base,      VMCS_GUEST_GS_BASE);
+        PRINT_VALUE(segs[R_GS].limit,     VMCS_GUEST_GS_LIMIT);
+        PRINT_VALUE(segs[R_GS].flags,     VMCS_GUEST_GS_AR);
+        PRINT_VALUE(segs[R_SS].selector,  VMCS_GUEST_SS);
+        PRINT_VALUE(segs[R_SS].base,      VMCS_GUEST_SS_BASE);
+        PRINT_VALUE(segs[R_SS].limit,     VMCS_GUEST_SS_LIMIT);
+        PRINT_VALUE(segs[R_SS].flags,     VMCS_GUEST_SS_AR);
+        PRINT_VALUE(idt.base,         VMCS_GUEST_IDTR_BASE);
+        PRINT_VALUE(idt.limit,        VMCS_GUEST_IDTR_LIMIT);
+        PRINT_VALUE(gdt.base,         VMCS_GUEST_GDTR_BASE);
+        PRINT_VALUE(gdt.limit,        VMCS_GUEST_GDTR_LIMIT);
+        PRINT_VALUE(ldt.selector,     VMCS_GUEST_LDTR);
+        PRINT_VALUE(ldt.base,         VMCS_GUEST_LDTR_BASE);
+        PRINT_VALUE(ldt.limit,        VMCS_GUEST_LDTR_LIMIT);
+        PRINT_VALUE(ldt.flags,        VMCS_GUEST_LDTR_AR);
+        PRINT_VALUE(tr.selector,      VMCS_GUEST_TR);
+        PRINT_VALUE(tr.base,          VMCS_GUEST_TR_BASE);
+        PRINT_VALUE(tr.limit,         VMCS_GUEST_TR_LIMIT);
+        PRINT_VALUE(tr.flags,         VMCS_GUEST_TR_AR);
+        PRINT_VALUE(cr[0],            VMCS_GUEST_CR0);
+        PRINT_VALUE(cr[3],            VMCS_GUEST_CR3);
+        PRINT_VALUE(cr[4],            VMCS_GUEST_CR4);
+        PRINT_VALUE(efer,             VMCS_GUEST_IA32_EFER);
+
+        PRINT_REG(eip,         HV_X86_RIP);
+        PRINT_REG(eflags,      HV_X86_RFLAGS);
+        PRINT_REG(regs[R_EAX], HV_X86_RAX);
+        PRINT_REG(regs[R_EBX], HV_X86_RBX);
+        PRINT_REG(regs[R_ECX], HV_X86_RCX);
+        PRINT_REG(regs[R_EDX], HV_X86_RDX);
+        PRINT_REG(regs[R_ESI], HV_X86_RSI);
+        PRINT_REG(regs[R_EDI], HV_X86_RDI);
+        PRINT_REG(regs[R_ESP], HV_X86_RSP);
+        PRINT_REG(regs[R_EBP], HV_X86_RBP);
+        PRINT_REG(regs[8],     HV_X86_R8);
+        PRINT_REG(regs[9],     HV_X86_R9);
+        PRINT_REG(regs[10],    HV_X86_R10);
+        PRINT_REG(regs[11],    HV_X86_R11);
+        PRINT_REG(regs[12],    HV_X86_R12);
+        PRINT_REG(regs[13],    HV_X86_R13);
+        PRINT_REG(regs[14],    HV_X86_R14);
+        PRINT_REG(regs[15],    HV_X86_R15);
+        PRINT_REG(dr[0],       HV_X86_DR0);
+        PRINT_REG(dr[1],       HV_X86_DR1);
+        PRINT_REG(dr[2],       HV_X86_DR2);
+        PRINT_REG(dr[3],       HV_X86_DR3);
+        PRINT_REG(dr[4],       HV_X86_DR4);
+        PRINT_REG(dr[5],       HV_X86_DR5);
+        PRINT_REG(dr[6],       HV_X86_DR6);
+        PRINT_REG(dr[7],       HV_X86_DR7);
+
+        printf("--       --\n");
+
+
+
+}
+
+static hv_return_t hvf_put_regs(CPUState *cpu)
+{
+        X86CPU *x86_cpu = X86_CPU(cpu);
+        CPUX86State *env = &x86_cpu->env;
+        hv_vcpuid_t vcpuid = cpu->vcpuid;
         hv_return_t ret = 0;
 
-        ret |= hvf_getput_reg(vcpu, HV_X86_RIP, &regs->hv_x86_rip, HVF_GET_REGS);
-        ret |= hvf_getput_reg(vcpu, HV_X86_RFLAGS, &regs->hv_x86_rflags, HVF_GET_REGS);
-        ret |= hvf_getput_reg(vcpu, HV_X86_RAX, &regs->hv_x86_rax, HVF_GET_REGS);
-        ret |= hvf_getput_reg(vcpu, HV_X86_RBX, &regs->hv_x86_rbx, HVF_GET_REGS);
-        ret |= hvf_getput_reg(vcpu, HV_X86_RCX, &regs->hv_x86_rcx, HVF_GET_REGS);
-        ret |= hvf_getput_reg(vcpu, HV_X86_RDX, &regs->hv_x86_rdx, HVF_GET_REGS);
-        ret |= hvf_getput_reg(vcpu, HV_X86_RSI, &regs->hv_x86_rsi, HVF_GET_REGS);
-        ret |= hvf_getput_reg(vcpu, HV_X86_RDI, &regs->hv_x86_rdi, HVF_GET_REGS);
-        ret |= hvf_getput_reg(vcpu, HV_X86_RSP, &regs->hv_x86_rsp, HVF_GET_REGS);
-        ret |= hvf_getput_reg(vcpu, HV_X86_RBP, &regs->hv_x86_rbp, HVF_GET_REGS);
-        ret |= hvf_getput_reg(vcpu, HV_X86_R8, &regs->hv_x86_r8, HVF_GET_REGS);
-        ret |= hvf_getput_reg(vcpu, HV_X86_R9, &regs->hv_x86_r9, HVF_GET_REGS);
-        ret |= hvf_getput_reg(vcpu, HV_X86_R10, &regs->hv_x86_r10, HVF_GET_REGS);
-        ret |= hvf_getput_reg(vcpu, HV_X86_R11, &regs->hv_x86_r11, HVF_GET_REGS);
-        ret |= hvf_getput_reg(vcpu, HV_X86_R12, &regs->hv_x86_r12, HVF_GET_REGS);
-        ret |= hvf_getput_reg(vcpu, HV_X86_R13, &regs->hv_x86_r13, HVF_GET_REGS);
-        ret |= hvf_getput_reg(vcpu, HV_X86_R14, &regs->hv_x86_r14, HVF_GET_REGS);
-        ret |= hvf_getput_reg(vcpu, HV_X86_R15, &regs->hv_x86_r15, HVF_GET_REGS);
+        ret |= hvf_getput_reg(vcpuid, HV_X86_RIP, &env->eip, HVF_SET_REGS);
+        ret |= hvf_getput_reg(vcpuid, HV_X86_RFLAGS, &env->eflags, HVF_SET_REGS);
+
+        ret |= hvf_getput_reg(vcpuid, HV_X86_RAX, &env->regs[R_EAX], HVF_SET_REGS);
+        ret |= hvf_getput_reg(vcpuid, HV_X86_RBX, &env->regs[R_EBX], HVF_SET_REGS);
+        ret |= hvf_getput_reg(vcpuid, HV_X86_RCX, &env->regs[R_ECX], HVF_SET_REGS);
+        ret |= hvf_getput_reg(vcpuid, HV_X86_RDX, &env->regs[R_EDX], HVF_SET_REGS);
+
+        ret |= hvf_getput_reg(vcpuid, HV_X86_RSI, &env->regs[R_ESI], HVF_SET_REGS);
+        ret |= hvf_getput_reg(vcpuid, HV_X86_RDI, &env->regs[R_EDI], HVF_SET_REGS);
+
+        ret |= hvf_getput_reg(vcpuid, HV_X86_RSP, &env->regs[R_ESP], HVF_SET_REGS);
+        ret |= hvf_getput_reg(vcpuid, HV_X86_RBP, &env->regs[R_EBP], HVF_SET_REGS);
+
+        ret |= hvf_getput_reg(vcpuid, HV_X86_R8, &env->regs[8], HVF_SET_REGS);
+        ret |= hvf_getput_reg(vcpuid, HV_X86_R9, &env->regs[9], HVF_SET_REGS);
+        ret |= hvf_getput_reg(vcpuid, HV_X86_R10, &env->regs[10], HVF_SET_REGS);
+        ret |= hvf_getput_reg(vcpuid, HV_X86_R11, &env->regs[11], HVF_SET_REGS);
+        ret |= hvf_getput_reg(vcpuid, HV_X86_R12, &env->regs[12], HVF_SET_REGS);
+        ret |= hvf_getput_reg(vcpuid, HV_X86_R13, &env->regs[13], HVF_SET_REGS);
+        ret |= hvf_getput_reg(vcpuid, HV_X86_R14, &env->regs[14], HVF_SET_REGS);
+        ret |= hvf_getput_reg(vcpuid, HV_X86_R15, &env->regs[15], HVF_SET_REGS);
+        ret |= hvf_getput_reg(vcpuid, HV_X86_DR0, &env->dr[0], HVF_SET_REGS);
+        ret |= hvf_getput_reg(vcpuid, HV_X86_DR1, &env->dr[1], HVF_SET_REGS);
+        ret |= hvf_getput_reg(vcpuid, HV_X86_DR2, &env->dr[2], HVF_SET_REGS);
+        ret |= hvf_getput_reg(vcpuid, HV_X86_DR3, &env->dr[3], HVF_SET_REGS);
+        ret |= hvf_getput_reg(vcpuid, HV_X86_DR4, &env->dr[4], HVF_SET_REGS);
+        ret |= hvf_getput_reg(vcpuid, HV_X86_DR5, &env->dr[5], HVF_SET_REGS);
+        ret |= hvf_getput_reg(vcpuid, HV_X86_DR6, &env->dr[6], HVF_SET_REGS);
+        ret |= hvf_getput_reg(vcpuid, HV_X86_DR7, &env->dr[7], HVF_SET_REGS);
+
+        EXIT_IF_FAIL(hvf_put_regs);
 
         return ret;
 }
-#endif
-
 
 static hv_return_t hvf_put_sregs(CPUState *cpu)
 {
@@ -64,125 +176,20 @@ static hv_return_t hvf_put_sregs(CPUState *cpu)
         SET_SEG(vcpuid, SS, env->segs[R_SS]);
         SET_SEG(vcpuid, TR, env->tr);
         SET_SEG(vcpuid, LDTR, env->ldt);
+
+        ret |= hv_vmx_vcpu_write_vmcs(vcpuid, VMCS_GUEST_CR0, env->cr[0]);
+        ret |= hv_vmx_vcpu_write_vmcs(vcpuid, VMCS_GUEST_CR3, env->cr[3]);
+        ret |= hv_vmx_vcpu_write_vmcs(vcpuid, VMCS_GUEST_CR4, env->cr[4]);
+
         ret |= hv_vmx_vcpu_write_vmcs(vcpuid, VMCS_GUEST_IDTR_BASE, env->idt.base);
         ret |= hv_vmx_vcpu_write_vmcs(vcpuid, VMCS_GUEST_IDTR_LIMIT, env->idt.limit);
         ret |= hv_vmx_vcpu_write_vmcs(vcpuid, VMCS_GUEST_GDTR_BASE, env->gdt.base);
         ret |= hv_vmx_vcpu_write_vmcs(vcpuid, VMCS_GUEST_GDTR_LIMIT, env->gdt.limit);
-        ret |= hv_vmx_vcpu_write_vmcs(vcpuid, VMCS_GUEST_CR0, env->cr[0]);
-        ret |= hv_vmx_vcpu_write_vmcs(vcpuid, VMCS_GUEST_CR3, env->cr[3]);
-        ret |= hv_vmx_vcpu_write_vmcs(vcpuid, VMCS_GUEST_CR4, env->cr[4]);
-        ret |= hv_vmx_vcpu_write_vmcs(vcpuid, VMCS_GUEST_IA32_EFER, env->efer);
-
-//#define CPU_BASED_CTRL (CPU_BASED_HLT | CPU_BASED_CR8_LOAD | CPU_BASED_CR8_STORE)
-//        ret |= hv_vmx_vcpu_write_vmcs(vcpuid, VMCS_CTRL_CPU_BASED, CPU_BASED_CTRL);
-#if 0
-        if (env->interrupt_injected >= 0) {
-                sregs.interrupt_bitmap[env->interrupt_injected / 64] |=
-                        (uint64_t)1 << (env->interrupt_injected % 64);
-        }
-        sregs.apic_base = cpu_get_apic_base(cpu->apic_state);
-        uint64_t cr8 = cpu_get_apic_tpr(cpu->apic_state);
-#endif
 
         EXIT_IF_FAIL(hvf_put_sregs);
 
         return ret;
 
-}
-
-#define PRINT_VALUE(name) printf("  --> " #name ": 0x%llx\n", (unsigned long long)env->name);
-void hvf_debug(CPUState *cpu)
-{
-        CPUX86State *env = &X86_CPU(cpu)->env;
-
-        printf("----\n");
-
-        PRINT_VALUE(segs[R_CS].base);
-        PRINT_VALUE(segs[R_CS].limit);
-        PRINT_VALUE(segs[R_CS].flags);
-        PRINT_VALUE(segs[R_DS].base);
-        PRINT_VALUE(segs[R_DS].limit);
-        PRINT_VALUE(segs[R_DS].flags);
-        PRINT_VALUE(segs[R_ES].base);
-        PRINT_VALUE(segs[R_ES].limit);
-        PRINT_VALUE(segs[R_ES].flags);
-        PRINT_VALUE(segs[R_FS].base);
-        PRINT_VALUE(segs[R_FS].limit);
-        PRINT_VALUE(segs[R_FS].flags);
-        PRINT_VALUE(segs[R_GS].base);
-        PRINT_VALUE(segs[R_GS].limit);
-        PRINT_VALUE(segs[R_GS].flags);
-        PRINT_VALUE(segs[R_SS].base);
-        PRINT_VALUE(segs[R_SS].limit);
-        PRINT_VALUE(segs[R_SS].flags);
-        PRINT_VALUE(idt.base);
-        PRINT_VALUE(idt.limit);
-        PRINT_VALUE(idt.flags);
-        PRINT_VALUE(gdt.base);
-        PRINT_VALUE(gdt.limit);
-        PRINT_VALUE(gdt.flags);
-        PRINT_VALUE(ldt.base);
-        PRINT_VALUE(ldt.limit);
-        PRINT_VALUE(ldt.flags);
-        PRINT_VALUE(cr[0]);
-        PRINT_VALUE(cr[3]);
-        PRINT_VALUE(cr[4]);
-        PRINT_VALUE(efer);
-
-        PRINT_VALUE(eip);
-        PRINT_VALUE(eflags);
-        PRINT_VALUE(regs[R_EAX]);
-        PRINT_VALUE(regs[R_EBX]);
-        PRINT_VALUE(regs[R_ECX]);
-        PRINT_VALUE(regs[R_EDX]);
-        PRINT_VALUE(regs[R_ESI]);
-        PRINT_VALUE(regs[R_EDI]);
-        PRINT_VALUE(regs[R_ESP]);
-        PRINT_VALUE(regs[R_EBP]);
-        PRINT_VALUE(regs[8]);
-        PRINT_VALUE(regs[9]);
-        PRINT_VALUE(regs[10]);
-        PRINT_VALUE(regs[11]);
-        PRINT_VALUE(regs[12]);
-        PRINT_VALUE(regs[13]);
-        PRINT_VALUE(regs[14]);
-        PRINT_VALUE(regs[15]);
-
-        printf("----\n");
-
-
-
-}
-
-static hv_return_t hvf_put_regs(CPUState *cpu)
-{
-        X86CPU *x86_cpu = X86_CPU(cpu);
-        CPUX86State *env = &x86_cpu->env;
-        hv_vcpuid_t vcpuid = cpu->vcpuid;
-        hv_return_t ret = 0;
-
-        ret |= hvf_getput_reg(vcpuid, HV_X86_RIP, &env->eip, HVF_SET_REGS);
-        ret |= hvf_getput_reg(vcpuid, HV_X86_RFLAGS, &env->eflags, HVF_SET_REGS);
-        ret |= hvf_getput_reg(vcpuid, HV_X86_RAX, &env->regs[R_EAX], HVF_SET_REGS);
-        ret |= hvf_getput_reg(vcpuid, HV_X86_RBX, &env->regs[R_EBX], HVF_SET_REGS);
-        ret |= hvf_getput_reg(vcpuid, HV_X86_RCX, &env->regs[R_ECX], HVF_SET_REGS);
-        ret |= hvf_getput_reg(vcpuid, HV_X86_RDX, &env->regs[R_EDX], HVF_SET_REGS);
-        ret |= hvf_getput_reg(vcpuid, HV_X86_RSI, &env->regs[R_ESI], HVF_SET_REGS);
-        ret |= hvf_getput_reg(vcpuid, HV_X86_RDI, &env->regs[R_EDI], HVF_SET_REGS);
-        ret |= hvf_getput_reg(vcpuid, HV_X86_RSP, &env->regs[R_ESP], HVF_SET_REGS);
-        ret |= hvf_getput_reg(vcpuid, HV_X86_RBP, &env->regs[R_EBP], HVF_SET_REGS);
-        ret |= hvf_getput_reg(vcpuid, HV_X86_R8, &env->regs[8], HVF_SET_REGS);
-        ret |= hvf_getput_reg(vcpuid, HV_X86_R9, &env->regs[9], HVF_SET_REGS);
-        ret |= hvf_getput_reg(vcpuid, HV_X86_R10, &env->regs[10], HVF_SET_REGS);
-        ret |= hvf_getput_reg(vcpuid, HV_X86_R11, &env->regs[11], HVF_SET_REGS);
-        ret |= hvf_getput_reg(vcpuid, HV_X86_R12, &env->regs[12], HVF_SET_REGS);
-        ret |= hvf_getput_reg(vcpuid, HV_X86_R13, &env->regs[13], HVF_SET_REGS);
-        ret |= hvf_getput_reg(vcpuid, HV_X86_R14, &env->regs[14], HVF_SET_REGS);
-        ret |= hvf_getput_reg(vcpuid, HV_X86_R15, &env->regs[15], HVF_SET_REGS);
-
-        EXIT_IF_FAIL(hvf_put_regs);
-
-        return ret;
 }
 
 static hv_return_t hvf_init_msr(CPUState *cpu)
@@ -199,6 +206,7 @@ static hv_return_t hvf_init_msr(CPUState *cpu)
         ret |= hv_vmx_vcpu_write_vmcs(vcpuid, VMCS_GUEST_SYSENTER_EIP, env->sysenter_eip);
         ret |= hv_vmx_vcpu_write_vmcs(vcpuid, VMCS_GUEST_SYSENTER_ESP, env->sysenter_esp);
         ret |= hv_vmx_vcpu_write_vmcs(vcpuid, VMCS_GUEST_IA32_SYSENTER_CS, env->sysenter_cs);
+        ret |= hv_vmx_vcpu_write_vmcs(vcpuid, VMCS_GUEST_IA32_EFER, env->efer);
 
 #ifdef TARGET_X86_64
         ret |= hv_vcpu_enable_native_msr(vcpuid, MSR_KERNELGSBASE, HVF_MSR_ENABLE);
@@ -206,15 +214,6 @@ static hv_return_t hvf_init_msr(CPUState *cpu)
         ret |= hv_vcpu_enable_native_msr(vcpuid, MSR_LSTAR, HVF_MSR_ENABLE);
         ret |= hv_vcpu_enable_native_msr(vcpuid, MSR_CSTAR, HVF_MSR_ENABLE);
         ret |= hv_vcpu_enable_native_msr(vcpuid, MSR_STAR, HVF_MSR_ENABLE);
-#endif
-
-#if 1
-        // Need to check why
-        ret |= hv_vcpu_enable_native_msr(vcpuid, MSR_GSBASE, HVF_MSR_ENABLE);
-        ret |= hv_vcpu_enable_native_msr(vcpuid, MSR_FSBASE, HVF_MSR_ENABLE);
-        ret |= hv_vcpu_enable_native_msr(vcpuid, MSR_IA32_TSC, HVF_MSR_ENABLE);
-        ret |= hv_vcpu_enable_native_msr(vcpuid, MSR_TSC_AUX, HVF_MSR_ENABLE);
-        //MSR_PAT?
 #endif
 
         EXIT_IF_FAIL(hvf_init_msr);
@@ -243,18 +242,32 @@ hv_return_t hvf_vcpu_init(CPUState *cpu)
         EXIT_IF_FAIL(hv_vcpu_create);
 
         ret = hvf_init_msr(cpu);
-
         ret = hvf_update_state(cpu);
 
-		// DEBUG
-#if 0
+
+#if 0   // DEBUG
+
+        uint64_t tmp;
+        hv_vmx_vcpu_read_vmcs(cpu->vcpuid, VMCS_CTRL_VMENTRY_CONTROLS, &tmp);
+        print_vmentry_controls(tmp);
+        hv_vmx_vcpu_read_vmcs(cpu->vcpuid, VMCS_CTRL_PIN_BASED, &tmp);
+        print_pinbased_controls(tmp);
+        hv_vmx_vcpu_read_vmcs(cpu->vcpuid, VMCS_CTRL_CPU_BASED, &tmp);
+        print_procbased1_controls(tmp);
+        hv_vmx_vcpu_read_vmcs(cpu->vcpuid, VMCS_CTRL_CPU_BASED2, &tmp);
+        print_procbased2_controls(tmp);
+#endif
+
+
+#if 0   // DEBUG
+        // TSC ?
         hv_return_t vcpuid = cpu->vcpuid;
-        ret |= hv_vmx_vcpu_write_vmcs(vcpuid, VMCS_CTRL_PIN_BASED, 0x3f);
-        ret |= hv_vmx_vcpu_write_vmcs(vcpuid, VMCS_CTRL_CPU_BASED, 0xb5186dfa);
-        ret |= hv_vmx_vcpu_write_vmcs(vcpuid, VMCS_CTRL_CPU_BASED2, 0xaa);
-        ret |= hv_vmx_vcpu_write_vmcs(vcpuid, VMCS_CTRL_VMEXIT_CONTROLS, 0x236fff);
-        ret |= hv_vmx_vcpu_write_vmcs(vcpuid, VMCS_CTRL_VMENTRY_CONTROLS, 0x91ff);
-		hv_vmx_vcpu_write_vmcs(cpu->vcpuid, 0x00004004, 1 << 18);
+        // Need to check why
+        ret |= hv_vcpu_enable_native_msr(vcpuid, MSR_GSBASE, HVF_MSR_ENABLE);
+        ret |= hv_vcpu_enable_native_msr(vcpuid, MSR_FSBASE, HVF_MSR_ENABLE);
+        ret |= hv_vcpu_enable_native_msr(vcpuid, MSR_IA32_TSC, HVF_MSR_ENABLE);
+        ret |= hv_vcpu_enable_native_msr(vcpuid, MSR_TSC_AUX, HVF_MSR_ENABLE);
+
 #endif
 		return ret;
 }
