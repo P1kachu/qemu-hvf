@@ -123,6 +123,7 @@ hv_return_t hvf_vcpu_exec(CPUState *cpu)
         qemu_mutex_unlock_iothread();
 
         hvf_update_state(cpu);
+        hvf_debug(cpu);
 
         ret = hv_vcpu_run(cpu->vcpuid);
 
@@ -143,7 +144,8 @@ hv_return_t hvf_vcpu_exec(CPUState *cpu)
                         break;
                 case VMX_REASON_VMENTRY_GUEST:
                         fprintf(stderr,
-                                "Invalid guest state (%s)\n",
+                                "%llx - Invalid guest state (%s)\n",
+                                exit_reason & 0xffff,
                                 exit_reason_str(exit_reason & 0xffff));
                         abort();
                         break;
