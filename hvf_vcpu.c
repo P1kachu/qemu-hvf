@@ -19,6 +19,124 @@ static hv_return_t hvf_getput_reg(hv_vcpuid_t vcpu,
         }
 }
 
+/*
+ * Parsing Intel manual to understand why I
+ * get this fuc**** VMX_REASON_VMENTRY_GUEST
+ * error.
+ */
+
+#define GET_AND_CHECK_VMCS(val, var) \
+        var = 0;\
+        ret = hv_vmx_vcpu_read_vmcs(vcpuid, val, &var); \
+        if (ret) {printf("\033[31;1mREADING VMCS FAILED FOR " #val " (0x%x)\033[0m\n", ret); abort();}
+
+#define GET_AND_CHECK_MSR(val, var) \
+        var = 0;\
+        ret = hv_vcpu_read_msr(vcpuid, val, &var); \
+        if (ret) {printf("\033[31;1mREADING MSR FAILED FOR " #val " (0x%x)\033[0m\n", ret); abort();}
+
+#define warning(str) printf("\033[33;1m[*] %s\033[0m", str);
+static void check_vm_entry(CPUState *cpu)
+{
+        hv_return_t ret = 0;
+        hv_vcpuid_t vcpuid = cpu->vcpuid;
+
+        uint64_t tmp;
+        uint64_t controls, pin_based, cpu_based1, cpu_based2;
+        uint64_t cr0, cr4;
+        uint8_t unrestricted_guest, load_debug_controls, ia_32e_mode_guest,
+                ia_32_perf_global_ctrl, ia_32_pat, ia_32_efer, ia_32_bndcfgs;
+
+
+        GET_AND_CHECK_VMCS(VMCS_CTRL_VMENTRY_CONTROLS, controls);
+        GET_AND_CHECK_VMCS(VMCS_CTRL_PIN_BASED, pin_based);
+        GET_AND_CHECK_VMCS(VMCS_CTRL_CPU_BASED, cpu_based1);
+        GET_AND_CHECK_VMCS(VMCS_CTRL_CPU_BASED2, cpu_based2);
+
+        unrestricted_guest      = get_bit(cpu_based2, 7);
+        load_debug_controls     = get_bit(controls, 2);
+        ia_32e_mode_guest       = get_bit(controls, 9);
+        ia_32_perf_global_ctrl  = get_bit(controls, 13);
+        ia_32_pat               = get_bit(controls, 14);
+        ia_32_efer              = get_bit(controls, 15);
+        ia_32_bndcfgs           = get_bit(controls, 16);
+
+        GET_AND_CHECK_VMCS(VMCS_GUEST_CR0, cr0);
+        GET_AND_CHECK_VMCS(VMCS_GUEST_CR4, cr4);
+
+        if (!unrestricted_guest) {
+                assert(!get_bit(cr0, 31) || get_bit(cr0, 0));
+        }
+
+        if (load_debug_controls) {
+                GET_AND_CHECK_VMCS(VMCS_GUEST_IA32_DEBUGCTL, tmp);
+                hv_vmx_vcpu_write_vmcs(vcpuid, VMCS_GUEST_IA32_DEBUGCTL, tmp & 0b1101111111000011);
+                GET_AND_CHECK_VMCS(VMCS_GUEST_IA32_DEBUGCTL, tmp);
+                assert(!get_bit(tmp, 2)
+                    && !get_bit(tmp, 3)
+                    && !get_bit(tmp, 4)
+                    && !get_bit(tmp, 5)
+                    && !get_bit(tmp, 13)
+                    && tmp < 65535);
+        }
+
+        if (ia_32e_mode_guest) {
+                assert(get_bit(cr0, 31) && get_bit(cr4, 5));
+        } else {
+                assert(!get_bit(cr4, 17));
+        }
+
+        GET_AND_CHECK_VMCS(VMCS_GUEST_CR3, tmp);
+        assert(!tmp); // CR3 field must be such that bits 63:52 and
+                      // bits in the range 51:32 beyond the
+                      // processor's physical address width are 0
+
+        if (load_debug_controls) {
+                GET_AND_CHECK_VMCS(VMCS_GUEST_DR7, tmp);
+                assert(tmp < 0b100000000000000000000000000000000);
+        }
+
+        warning("Didn't check IA32_SYSENTER_ESP canonical\n");
+        warning("Didn't check IA32_SYSENTER_EIP canonical\n");
+
+
+        if (ia_32_perf_global_ctrl) {
+                warning("IA_32_PERF_GLOBAL_CTRL not tested\n");
+                GET_AND_CHECK_VMCS(VMCS_GUEST_IA32_PERF_GLOBAL_CTRL, tmp);
+                assert(!tmp); // Too few bits not reserved
+        }
+
+        if (ia_32_pat) {
+                warning("IA_32_PAT not tested\n");
+                GET_AND_CHECK_VMCS(VMCS_GUEST_IA32_PAT, tmp);
+                for (int i = 0; i < 8; ++i) {
+                        char tmpbyte = tmp & 0xff;
+                        assert(tmpbyte == 0
+                                        || tmpbyte == 1
+                                        || tmpbyte == 4
+                                        || tmpbyte == 5
+                                        || tmpbyte == 6
+                                        || tmpbyte == 7);
+                        tmp >>= 8;
+
+                }
+        }
+
+        if (ia_32_efer) {
+                GET_AND_CHECK_VMCS(VMCS_GUEST_IA32_EFER, tmp);
+                assert(!tmp); // Too few bits not reserved
+                assert(get_bit(tmp, 10) == ia_32e_mode_guest);
+                assert(!get_bit(cr0, 31) || (get_bit(tmp, 10) == get_bit(tmp, 8)));
+        }
+
+        if (ia_32_bndcfgs) {
+                 warning("Didn't check IA32_BNDCFGS\n")
+        }
+
+        printf("\033[32;1mEVERYTHING CLEAR SO FAR\033[0m\n");
+
+}
+
 void hvf_debug(CPUState *cpu)
 {
         CPUX86State *env = &X86_CPU(cpu)->env;
@@ -114,6 +232,7 @@ void hvf_debug(CPUState *cpu)
 
         printf("--       --\n");
 
+       check_vm_entry(cpu);
 
 
 }
@@ -244,8 +363,7 @@ hv_return_t hvf_vcpu_init(CPUState *cpu)
         ret = hvf_init_msr(cpu);
         ret = hvf_update_state(cpu);
 
-
-#if 0   // DEBUG
+#if 1   // DEBUG
 
         uint64_t tmp;
         hv_vmx_vcpu_read_vmcs(cpu->vcpuid, VMCS_CTRL_VMENTRY_CONTROLS, &tmp);
