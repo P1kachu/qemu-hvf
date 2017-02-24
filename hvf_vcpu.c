@@ -44,29 +44,32 @@ static void check_vm_entry(CPUState *cpu)
         hv_vcpuid_t vcpuid = cpu->vcpuid;
 
         uint64_t tmp, tmp2;
-        uint64_t controls, pin_based, cpu_based1, cpu_based2;
-        uint64_t cr0, cr4, rflags;
+        uint64_t controls, pin_based, cpu_based1, cpu_based2, interrupt;
+        uint64_t cr0, cr4, rflags, rip;
         uint8_t unrestricted_guest, load_debug_controls, ia_32e_mode_guest,
                 ia_32_perf_global_ctrl, ia_32_pat, ia_32_efer, ia_32_bndcfgs,
-                v8086;
+                v8086, valid;
 
 
         GET_AND_CHECK_VMCS(VMCS_CTRL_VMENTRY_CONTROLS, controls);
         GET_AND_CHECK_VMCS(VMCS_CTRL_PIN_BASED, pin_based);
         GET_AND_CHECK_VMCS(VMCS_CTRL_CPU_BASED, cpu_based1);
         GET_AND_CHECK_VMCS(VMCS_CTRL_CPU_BASED2, cpu_based2);
+        GET_AND_CHECK_VMCS(VMCS_CTRL_VMENTRY_IRQ_INFO, interrupt);
         GET_AND_CHECK_VMCS(VMCS_GUEST_CR0, cr0);
         GET_AND_CHECK_VMCS(VMCS_GUEST_CR4, cr4);
         GET_AND_CHECK_VMCS(VMCS_GUEST_RFLAGS, rflags);
+        GET_AND_CHECK_VMCS(VMCS_GUEST_RIP, rip);
 
-        unrestricted_guest      = get_bit(cpu_based2, 7);
-        load_debug_controls     = get_bit(controls, 2);
-        ia_32e_mode_guest       = get_bit(controls, 9);
-        ia_32_perf_global_ctrl  = get_bit(controls, 13);
-        ia_32_pat               = get_bit(controls, 14);
-        ia_32_efer              = get_bit(controls, 15);
-        ia_32_bndcfgs           = get_bit(controls, 16);
-        v8086                   = get_bit(rflags, 17);
+        unrestricted_guest          = get_bit(cpu_based2, 7);
+        load_debug_controls         = get_bit(controls, 2);
+        ia_32e_mode_guest           = get_bit(controls, 9);
+        ia_32_perf_global_ctrl      = get_bit(controls, 13);
+        ia_32_pat                   = get_bit(controls, 14);
+        ia_32_efer                  = get_bit(controls, 15);
+        ia_32_bndcfgs               = get_bit(controls, 16);
+        valid                       = get_bit(interrupt, 31);
+        v8086                       = get_bit(rflags, 17);
 
 
         if (!unrestricted_guest) {
@@ -273,7 +276,79 @@ static void check_vm_entry(CPUState *cpu)
                         assert(get_bit(tmp, 15));
                 }
 
+                for (int i = 16; i < 32; ++i) {
+                        assert(!get_bit(tmp, i)); // I don't care anymore.
+                }
+
         }
+
+        // TR AR
+        GET_AND_CHECK_VMCS(VMCS_GUEST_TR_AR, tmp);
+        GET_AND_CHECK_VMCS(VMCS_GUEST_TR_LIMIT, tmp2);
+        uint8_t tr_type = tmp & 0xf;
+        assert(tr_type == 11 || (tr_type == 3 && !ia_32e_mode_guest));
+        assert(!get_bit(tmp, 4));
+        assert(get_bit(tmp, 7));
+        assert(!get_bit(tmp, 8));
+        assert(!get_bit(tmp, 9));
+        assert(!get_bit(tmp, 10));
+        assert(!get_bit(tmp, 11));
+
+        if ((tmp2 & 0xfff) != 0xfff) {
+                assert(!get_bit(tmp, 15));
+        }
+        if (tmp2 > 0xfffff) {
+                assert(get_bit(tmp, 15));
+        }
+
+        for (int i = 16; i < 32; ++i) {
+                assert(!get_bit(tmp, i)); // I still don't care.
+        }
+
+        // LDTR AR
+        GET_AND_CHECK_VMCS(VMCS_GUEST_LDTR_AR, tmp);
+        GET_AND_CHECK_VMCS(VMCS_GUEST_LDTR_LIMIT, tmp2);
+        uint8_t ldtr_type = tmp & 0xf;
+        assert(ldtr_type == 2);
+        assert(!get_bit(tmp, 4));
+        assert(get_bit(tmp, 7));
+        assert(!get_bit(tmp, 8));
+        assert(!get_bit(tmp, 9));
+        assert(!get_bit(tmp, 10));
+        assert(!get_bit(tmp, 11));
+
+        if ((tmp2 & 0xfff) != 0xfff) {
+                assert(!get_bit(tmp, 15));
+        }
+        if (tmp2 > 0xfffff) {
+                assert(get_bit(tmp, 15));
+        }
+
+        for (int i = 16; i < 32; ++i) {
+                assert(!get_bit(tmp, i)); // I still don't care.
+        }
+
+        warning("Didn't check IDTR, GDTR canonical\n");
+        GET_AND_CHECK_VMCS(VMCS_GUEST_GDTR_LIMIT, tmp);
+        assert(tmp < 0b100000000000000000000000000000000);
+        GET_AND_CHECK_VMCS(VMCS_GUEST_IDTR_LIMIT, tmp);
+        assert(tmp < 0b100000000000000000000000000000000);
+
+        if (!ia_32e_mode_guest || !get_bit(tmp, 13)) {
+                assert(rip < 0b100000000000000000000000000000000);
+        }
+
+        warning("Didn't check 26.3.1.4.RIP.2\n");
+
+        assert(rflags < 0b100000000000000000000);
+        assert(!get_bit(rflags, 15) && !get_bit(rflags, 5) && !get_bit(rflags, 3) && get_bit(rflags, 1));
+        if (ia_32e_mode_guest || !get_bit(cr0, 0)) {
+                assert(!get_bit(rflags, 17));
+        }
+        assert(!get_bit(rflags, 17) || (!ia_32e_mode_guest && get_bit(cr0, 0)));
+
+        uint8_t irq_type = (interrupt >> 8) & 3;
+        assert(get_bit(rflags, 9) || (!valid || irq_type != IRQ_INFO_EXT_IRQ));
 
         printf("\033[32;1mEVERYTHING CLEAR SO FAR\033[0m\n");
 
