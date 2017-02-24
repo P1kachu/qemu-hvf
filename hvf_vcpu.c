@@ -38,20 +38,26 @@ static hv_return_t hvf_getput_reg(hv_vcpuid_t vcpu,
 #define warning(str) printf("\033[33;1m[*] %s\033[0m", str);
 static void check_vm_entry(CPUState *cpu)
 {
+        printf("\033[31;1mCHECKING CPU STATE FOR VMENTRY\033[0m\n");
+
         hv_return_t ret = 0;
         hv_vcpuid_t vcpuid = cpu->vcpuid;
 
-        uint64_t tmp;
+        uint64_t tmp, tmp2;
         uint64_t controls, pin_based, cpu_based1, cpu_based2;
-        uint64_t cr0, cr4;
+        uint64_t cr0, cr4, rflags;
         uint8_t unrestricted_guest, load_debug_controls, ia_32e_mode_guest,
-                ia_32_perf_global_ctrl, ia_32_pat, ia_32_efer, ia_32_bndcfgs;
+                ia_32_perf_global_ctrl, ia_32_pat, ia_32_efer, ia_32_bndcfgs,
+                v8086;
 
 
         GET_AND_CHECK_VMCS(VMCS_CTRL_VMENTRY_CONTROLS, controls);
         GET_AND_CHECK_VMCS(VMCS_CTRL_PIN_BASED, pin_based);
         GET_AND_CHECK_VMCS(VMCS_CTRL_CPU_BASED, cpu_based1);
         GET_AND_CHECK_VMCS(VMCS_CTRL_CPU_BASED2, cpu_based2);
+        GET_AND_CHECK_VMCS(VMCS_GUEST_CR0, cr0);
+        GET_AND_CHECK_VMCS(VMCS_GUEST_CR4, cr4);
+        GET_AND_CHECK_VMCS(VMCS_GUEST_RFLAGS, rflags);
 
         unrestricted_guest      = get_bit(cpu_based2, 7);
         load_debug_controls     = get_bit(controls, 2);
@@ -60,9 +66,8 @@ static void check_vm_entry(CPUState *cpu)
         ia_32_pat               = get_bit(controls, 14);
         ia_32_efer              = get_bit(controls, 15);
         ia_32_bndcfgs           = get_bit(controls, 16);
+        v8086                   = get_bit(rflags, 17);
 
-        GET_AND_CHECK_VMCS(VMCS_GUEST_CR0, cr0);
-        GET_AND_CHECK_VMCS(VMCS_GUEST_CR4, cr4);
 
         if (!unrestricted_guest) {
                 assert(!get_bit(cr0, 31) || get_bit(cr0, 0));
@@ -131,6 +136,143 @@ static void check_vm_entry(CPUState *cpu)
 
         if (ia_32_bndcfgs) {
                  warning("Didn't check IA32_BNDCFGS\n")
+        }
+
+
+        GET_AND_CHECK_VMCS(VMCS_GUEST_TR, tmp);
+        assert(!get_bit(tmp, 2));
+        GET_AND_CHECK_VMCS(VMCS_GUEST_LDTR, tmp);
+        assert(!get_bit(tmp, 2));
+
+        if (!v8086 && !unrestricted_guest) {
+                GET_AND_CHECK_VMCS(VMCS_GUEST_SS, tmp);
+                GET_AND_CHECK_VMCS(VMCS_GUEST_CS, tmp2);
+                assert((tmp & 0x3) == (tmp2 & 0x3));
+        }
+
+        if (v8086) {
+                warning("v8086 not tested\n");
+                #define v8086_SEGMENT_BASE_CHECKS(SEGMENT)\
+                GET_AND_CHECK_VMCS(VMCS_GUEST_ ## SEGMENT, tmp);\
+                GET_AND_CHECK_VMCS(VMCS_GUEST_ ## SEGMENT ## _BASE, tmp2);\
+                assert(tmp2 == (tmp << 4));
+
+                v8086_SEGMENT_BASE_CHECKS(CS);
+                v8086_SEGMENT_BASE_CHECKS(SS);
+                v8086_SEGMENT_BASE_CHECKS(DS);
+                v8086_SEGMENT_BASE_CHECKS(ES);
+                v8086_SEGMENT_BASE_CHECKS(FS);
+                v8086_SEGMENT_BASE_CHECKS(GS);
+        }
+
+        warning("Didn't check TR, FS, GS, LDTR base address canonical\n");
+
+        #define IA32E_SEGMENT_BASE_CHECKS(SEGMENT)\
+        GET_AND_CHECK_VMCS(VMCS_GUEST_## SEGMENT ##_BASE, tmp);\
+        assert(tmp < 0b100000000000000000000000000000000);
+        IA32E_SEGMENT_BASE_CHECKS(CS);
+        IA32E_SEGMENT_BASE_CHECKS(SS);
+        IA32E_SEGMENT_BASE_CHECKS(DS);
+        IA32E_SEGMENT_BASE_CHECKS(ES);
+
+        if (v8086) {
+                #define v8086_SEGMENT_LIMIT_CHECKS(SEGMENT)\
+                GET_AND_CHECK_VMCS(VMCS_GUEST_ ## SEGMENT ## _LIMIT, tmp);\
+                assert(tmp == 0x0000ffff);
+                v8086_SEGMENT_LIMIT_CHECKS(CS);
+                v8086_SEGMENT_LIMIT_CHECKS(SS);
+                v8086_SEGMENT_LIMIT_CHECKS(DS);
+                v8086_SEGMENT_LIMIT_CHECKS(ES);
+                v8086_SEGMENT_LIMIT_CHECKS(FS);
+                v8086_SEGMENT_LIMIT_CHECKS(GS);
+
+                #define v8086_SEGMENT_AR_CHECKS(SEGMENT)\
+                GET_AND_CHECK_VMCS(VMCS_GUEST_ ## SEGMENT ## _AR, tmp);\
+                assert(tmp == 0xf3);
+                v8086_SEGMENT_AR_CHECKS(CS);
+                v8086_SEGMENT_AR_CHECKS(SS);
+                v8086_SEGMENT_AR_CHECKS(DS);
+                v8086_SEGMENT_AR_CHECKS(ES);
+                v8086_SEGMENT_AR_CHECKS(FS);
+                v8086_SEGMENT_AR_CHECKS(GS);
+        } else {
+                // CS
+                GET_AND_CHECK_VMCS(VMCS_GUEST_CS_AR, tmp);
+                tmp &= 0xf;
+                if (!unrestricted_guest) {
+                        // 9, 11, 13 or 15
+                        assert(get_bit(tmp, 0) && get_bit(tmp, 3));
+                } else {
+                        // 3, 9, 11, 13 or 15
+                        assert((get_bit(tmp, 0) && get_bit(tmp, 3)) || tmp == 3);
+                }
+
+                // SS
+                GET_AND_CHECK_VMCS(VMCS_GUEST_SS_AR, tmp);
+                tmp &= 0xf;
+                assert((tmp == 3) || (tmp == 7));
+
+                // DS, ES, FS, GS
+                #define SEGMENT_AR_CHECKS(SEGMENT)\
+                GET_AND_CHECK_VMCS(VMCS_GUEST_ ## SEGMENT ## _AR, tmp);\
+                assert(get_bit(tmp, 0) && (!get_bit(tmp, 3) || get_bit(tmp, 1)));
+                SEGMENT_AR_CHECKS(DS);
+                SEGMENT_AR_CHECKS(ES);
+                SEGMENT_AR_CHECKS(FS);
+                SEGMENT_AR_CHECKS(GS);
+
+                GET_AND_CHECK_VMCS(VMCS_GUEST_CS_AR, tmp);
+                assert(get_bit(tmp, 4));
+
+                // CS DPL
+                GET_AND_CHECK_VMCS(VMCS_GUEST_SS_AR, tmp2);
+                uint8_t type = tmp & 0xf;
+                uint8_t cs_dpl = (tmp & 0x30) >> 4;
+                uint8_t ss_dpl = (tmp2 & 0x30) >> 4;
+                switch (type) {
+                        case 3:
+                                assert(!cs_dpl && unrestricted_guest);
+                                break;
+                        case 9:
+                        case 11:
+                                assert(cs_dpl == ss_dpl);
+                                break;
+                        case 13:
+                        case 15:
+                                assert(cs_dpl <= ss_dpl);
+                                break;
+                        default:
+                                warning("Invalid type for CS\n");
+                                abort();
+                }
+
+                // SS DPL
+                warning("Didn't check SS RPL\n");
+                assert(ss_dpl || (((tmp2 & 0xf) == 3) || (!get_bit(cr0, 0))));
+
+                // DS, ES, FS, GS DPLs
+                warning("Didn't check DS, ES, FS, GS DPLs\n");
+
+
+                GET_AND_CHECK_VMCS(VMCS_GUEST_CS_AR, tmp);
+                assert(get_bit(tmp, 7));
+                assert(!get_bit(tmp, 8));
+                assert(!get_bit(tmp, 9));
+                assert(!get_bit(tmp, 10));
+                assert(!get_bit(tmp, 11));
+
+                if (ia_32e_mode_guest && get_bit(13, tmp)) {
+                        assert(!get_bit(tmp, 14));
+                }
+
+                GET_AND_CHECK_VMCS(VMCS_GUEST_CS_LIMIT, tmp2);
+                if ((tmp2 & 0xfff) != 0xfff) {
+                        assert(!get_bit(tmp, 15));
+                }
+                if (tmp2 > 0xfffff) {
+                        assert(get_bit(tmp, 15));
+                }
+
         }
 
         printf("\033[32;1mEVERYTHING CLEAR SO FAR\033[0m\n");
