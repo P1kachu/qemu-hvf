@@ -350,6 +350,22 @@ static void check_vm_entry(CPUState *cpu)
         uint8_t irq_type = (interrupt >> 8) & 3;
         assert(get_bit(rflags, 9) || (!valid || irq_type != IRQ_INFO_EXT_IRQ));
 
+        warning("Didn't check 26.3.1.5.1\n");
+        GET_AND_CHECK_VMCS(VMCS_GUEST_INT_STATUS, tmp);
+        assert(tmp < 0x20);
+        //assert(!(get_bit(tmp, 0) && get_bit(tmp, 1)));
+        //assert(!get_bit(tmp, 0) || get_bit(rflags, 9));
+        assert(!get_bit(tmp, 0) || (!valid || irq_type != (IRQ_INFO_EXT_IRQ >> 8)));
+        assert(!get_bit(tmp, 1) || (!valid || irq_type != (IRQ_INFO_EXT_IRQ >> 8)));
+        assert(!get_bit(tmp, 1) || (!valid || irq_type != (IRQ_INFO_NMI >> 8)));
+        assert(get_bit(tmp, 2) == get_bit(controls, 10));
+        assert(!get_bit(tmp, 0) || (!valid || irq_type != (IRQ_INFO_NMI >> 8))); // Maybe
+        assert(!get_bit(tmp, 3) || !(get_bit(pin_based, 5) && valid && irq_type == (IRQ_INFO_NMI >> 8)));
+        warning("Didn't check Enclave/SGX part of interruptibility state\n");
+
+
+
+
         printf("\033[32;1mEVERYTHING CLEAR SO FAR\033[0m\n");
 
 }
