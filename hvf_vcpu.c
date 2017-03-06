@@ -13,18 +13,18 @@ static hv_return_t hvf_getput_reg(hv_vcpuid_t vcpu,
                                   int set)
 {
         if (set == HVF_SET_REGS) {
-                return hv_vcpu_write_register(vcpu, vmcs_offset, *general_register);
+                return hv_vcpu_write_register(vcpu,
+                                              vmcs_offset,
+                                              *general_register);
         } else {
-                return hv_vcpu_read_register(vcpu, vmcs_offset, general_register);
+                return hv_vcpu_read_register(vcpu,
+                                             vmcs_offset,
+                                             general_register);
         }
 }
 
-/*
- * Parsing Intel manual to understand why I
- * get this fuc**** VMX_REASON_VMENTRY_GUEST
- * error.
- */
-
+static void check_vm_entry(CPUState *cpu)
+{
 #define GET_AND_CHECK_VMCS(val, var) \
         var = 0;\
         ret = hv_vmx_vcpu_read_vmcs(vcpuid, val, &var); \
@@ -36,8 +36,6 @@ static hv_return_t hvf_getput_reg(hv_vcpuid_t vcpu,
         if (ret) {printf("\033[31;1mREADING MSR FAILED FOR " #val " (0x%x)\033[0m\n", ret); abort();}
 
 #define warning(str) printf("\033[33;1m[*] %s\033[0m", str);
-static void check_vm_entry(CPUState *cpu)
-{
         printf("\033[31;1mCHECKING CPU STATE FOR VMENTRY\033[0m\n");
 
         hv_return_t ret = 0;
@@ -104,10 +102,6 @@ static void check_vm_entry(CPUState *cpu)
                 assert(tmp < 0b100000000000000000000000000000000);
         }
 
-        warning("Didn't check IA32_SYSENTER_ESP canonical\n");
-        warning("Didn't check IA32_SYSENTER_EIP canonical\n");
-
-
         if (ia_32_perf_global_ctrl) {
                 warning("IA_32_PERF_GLOBAL_CTRL not tested\n");
                 GET_AND_CHECK_VMCS(VMCS_GUEST_IA32_PERF_GLOBAL_CTRL, tmp);
@@ -167,8 +161,6 @@ static void check_vm_entry(CPUState *cpu)
                 v8086_SEGMENT_BASE_CHECKS(FS);
                 v8086_SEGMENT_BASE_CHECKS(GS);
         }
-
-        warning("Didn't check TR, FS, GS, LDTR base address canonical\n");
 
         #define IA32E_SEGMENT_BASE_CHECKS(SEGMENT)\
         GET_AND_CHECK_VMCS(VMCS_GUEST_## SEGMENT ##_BASE, tmp);\
@@ -328,7 +320,6 @@ static void check_vm_entry(CPUState *cpu)
                 assert(!get_bit(tmp, i)); // I still don't care.
         }
 
-        warning("Didn't check IDTR, GDTR canonical\n");
         GET_AND_CHECK_VMCS(VMCS_GUEST_GDTR_LIMIT, tmp);
         assert(tmp < 0b100000000000000000000000000000000);
         GET_AND_CHECK_VMCS(VMCS_GUEST_IDTR_LIMIT, tmp);
@@ -364,6 +355,53 @@ static void check_vm_entry(CPUState *cpu)
         warning("Didn't check Enclave/SGX part of interruptibility state\n");
 
 
+        GET_AND_CHECK_VMCS(VMCS_GUEST_DEBUG_EXC, tmp);
+        assert(tmp <= 0b11111111111111111
+               && !get_bit(tmp, 15)
+               && !get_bit(tmp, 13)
+               && !get_bit(tmp, 11)
+               && !get_bit(tmp, 10)
+               && !get_bit(tmp, 9)
+               && !get_bit(tmp, 8)
+               && !get_bit(tmp, 7)
+               && !get_bit(tmp, 6)
+               && !get_bit(tmp, 5)
+               && !get_bit(tmp, 4));
+
+        if (/* SOME STUFF */ 1) {
+                GET_AND_CHECK_VMCS(VMCS_GUEST_IA32_DEBUGCTL, tmp2);
+                assert(get_bit(tmp, 14 || !(get_bit(rflags, 8) && !get_bit(tmp2, 1))));
+        }
+
+        if (get_bit(tmp, 16)) {
+                warning("VMCS_GUEST_DEBUG_EXC[16] not tested\n");
+                for (int i = 0; i < 16; ++i) {
+                        if (i != 12) {
+                                assert(!get_bit(tmp, i));
+                        }
+                }
+
+                warning("Didn't check CPUID part (VMCS_GUEST_DEBUG_EXC)\n");
+                GET_AND_CHECK_VMCS(VMCS_GUEST_INT_STATUS, tmp);
+                assert(!get_bit(tmp, 1));
+        }
+
+
+        GET_AND_CHECK_VMCS(VMCS_GUEST_LINK_POINTER, tmp);
+        if (tmp != 0xffffffffffffffff) {
+                warning("VMCS_GUEST_LINK_POINTER's value is ");
+                printf("%llx\n", tmp);
+                warning("VMCS_GUEST_LINK_POINTER not tested\n");
+                for (int i = 0; i < 12; ++i) {
+                       assert(!get_bit(tmp, i));
+                }
+
+        }
+
+        GET_AND_CHECK_VMCS(VMCS_GUEST_IA32_EFER, tmp);
+        if (get_bit(cr0, 31) && get_bit(cr4, 5) && !get_bit(controls, 9)) {
+                warning("PAE not tested\n");
+        }
 
 
         printf("\033[32;1mEVERYTHING CLEAR SO FAR\033[0m\n");
@@ -378,6 +416,15 @@ void hvf_debug(CPUState *cpu)
         printf("-- VCPU %d --\n", vcpu);
 
         uint64_t tmp, ret;
+
+        hv_vmx_vcpu_read_vmcs(cpu->vcpuid, VMCS_CTRL_VMENTRY_CONTROLS, &tmp);
+        print_vmentry_controls(tmp);
+        hv_vmx_vcpu_read_vmcs(cpu->vcpuid, VMCS_CTRL_PIN_BASED, &tmp);
+        print_pinbased_controls(tmp);
+        hv_vmx_vcpu_read_vmcs(cpu->vcpuid, VMCS_CTRL_CPU_BASED, &tmp);
+        print_procbased1_controls(tmp);
+        hv_vmx_vcpu_read_vmcs(cpu->vcpuid, VMCS_CTRL_CPU_BASED2, &tmp);
+        print_procbased2_controls(tmp);
 
 #define check_value(name, vmcs_field)                                       \
         printf("  " #name ":  0x%llx", tmp);                                \
@@ -551,22 +598,30 @@ static hv_return_t hvf_init_msr(CPUState *cpu)
         X86CPU *x86_cpu = X86_CPU(cpu);
         CPUX86State *env = &x86_cpu->env;
 
-        ret |= hv_vcpu_enable_native_msr(vcpuid, MSR_IA32_SYSENTER_CS, HVF_MSR_ENABLE);
-        ret |= hv_vcpu_enable_native_msr(vcpuid, MSR_IA32_SYSENTER_EIP, HVF_MSR_ENABLE);
-        ret |= hv_vcpu_enable_native_msr(vcpuid, MSR_IA32_SYSENTER_ESP, HVF_MSR_ENABLE);
-
-        ret |= hv_vmx_vcpu_write_vmcs(vcpuid, VMCS_GUEST_SYSENTER_EIP, env->sysenter_eip);
-        ret |= hv_vmx_vcpu_write_vmcs(vcpuid, VMCS_GUEST_SYSENTER_ESP, env->sysenter_esp);
-        ret |= hv_vmx_vcpu_write_vmcs(vcpuid, VMCS_GUEST_IA32_SYSENTER_CS, env->sysenter_cs);
-        ret |= hv_vmx_vcpu_write_vmcs(vcpuid, VMCS_GUEST_IA32_EFER, env->efer);
-
-#ifdef TARGET_X86_64
-        ret |= hv_vcpu_enable_native_msr(vcpuid, MSR_KERNELGSBASE, HVF_MSR_ENABLE);
-        ret |= hv_vcpu_enable_native_msr(vcpuid, MSR_FMASK, HVF_MSR_ENABLE);
+        ret |= hv_vcpu_enable_native_msr(vcpuid, MSR_STAR, HVF_MSR_ENABLE);
         ret |= hv_vcpu_enable_native_msr(vcpuid, MSR_LSTAR, HVF_MSR_ENABLE);
         ret |= hv_vcpu_enable_native_msr(vcpuid, MSR_CSTAR, HVF_MSR_ENABLE);
-        ret |= hv_vcpu_enable_native_msr(vcpuid, MSR_STAR, HVF_MSR_ENABLE);
-#endif
+        ret |= hv_vcpu_enable_native_msr(vcpuid, MSR_FMASK, HVF_MSR_ENABLE);
+        ret |= hv_vcpu_enable_native_msr(vcpuid, MSR_FSBASE, HVF_MSR_ENABLE);
+        ret |= hv_vcpu_enable_native_msr(vcpuid, MSR_GSBASE, HVF_MSR_ENABLE);
+        ret |= hv_vcpu_enable_native_msr(vcpuid, MSR_KERNELGSBASE, HVF_MSR_ENABLE);
+        ret |= hv_vcpu_enable_native_msr(vcpuid, MSR_TSC_AUX, HVF_MSR_ENABLE);
+        ret |= hv_vcpu_enable_native_msr(vcpuid, MSR_IA32_SYSENTER_CS, HVF_MSR_ENABLE);
+        ret |= hv_vcpu_enable_native_msr(vcpuid, MSR_IA32_SYSENTER_EIP, HVF_MSR_ENABLE);
+
+        ret |= hv_vcpu_write_msr(vcpuid, MSR_IA32_SYSENTER_CS, env->sysenter_cs);
+        ret |= hv_vcpu_write_msr(vcpuid, MSR_IA32_SYSENTER_EIP, env->sysenter_eip);
+        ret |= hv_vcpu_write_msr(vcpuid, MSR_IA32_SYSENTER_ESP, env->sysenter_esp);
+        ret |= hv_vmx_vcpu_write_vmcs(vcpuid, VMCS_GUEST_IA32_EFER, env->efer);
+
+        ret |= hv_vcpu_write_msr(vcpuid, MSR_STAR, env->star);
+        ret |= hv_vcpu_write_msr(vcpuid, MSR_CSTAR, env->cstar);
+        ret |= hv_vcpu_write_msr(vcpuid, MSR_KERNELGSBASE, env->kernelgsbase);
+        ret |= hv_vcpu_write_msr(vcpuid, MSR_FMASK, env->fmask);
+        ret |= hv_vcpu_write_msr(vcpuid, MSR_LSTAR, env->lstar);
+
+        ret |= hv_vcpu_write_msr(vcpuid, MSR_GSBASE, env->segs[R_GS].base);
+        ret |= hv_vcpu_write_msr(vcpuid, MSR_FSBASE, env->segs[R_FS].base);
 
         EXIT_IF_FAIL(hvf_init_msr);
 
@@ -593,33 +648,34 @@ hv_return_t hvf_vcpu_init(CPUState *cpu)
         hv_return_t ret = hv_vcpu_create(&cpu->vcpuid, HV_VCPU_DEFAULT);
         EXIT_IF_FAIL(hv_vcpu_create);
 
+
+        uint64_t tmp;
+        ret |= hv_vmx_read_capability(HV_VMX_CAP_PINBASED, &tmp);
+        ret |= hv_vmx_vcpu_write_vmcs(cpu->vcpuid,
+                                      VMCS_CTRL_PIN_BASED,
+                                      cap2ctrl(tmp, 0));
+        ret |= hv_vmx_read_capability(HV_VMX_CAP_PROCBASED, &tmp);
+        ret |= hv_vmx_vcpu_write_vmcs(cpu->vcpuid,
+                                      VMCS_CTRL_CPU_BASED,
+                                      cap2ctrl(tmp, CPU_BASED_HLT
+                                                  | CPU_BASED_MWAIT
+                                                  | CPU_BASED_IRQ_WND
+                                                  | CPU_BASED_TPR_SHADOW)
+                                      | CPU_BASED_SECONDARY_CTLS);
+
+        ret |= hv_vmx_read_capability(HV_VMX_CAP_PROCBASED2, &tmp);
+        ret |= hv_vmx_vcpu_write_vmcs(cpu->vcpuid,
+                                      VMCS_CTRL_CPU_BASED2,
+                                      cap2ctrl(tmp, CPU_BASED2_VIRTUAL_APIC));
+
+        ret |= hv_vmx_read_capability(HV_VMX_CAP_ENTRY, &tmp);
+        ret |= hv_vmx_vcpu_write_vmcs(cpu->vcpuid,
+                                      VMCS_CTRL_VMENTRY_CONTROLS,
+                                      cap2ctrl(tmp, 0));
+
         ret = hvf_init_msr(cpu);
         ret = hvf_update_state(cpu);
 
-#if 1   // DEBUG
-
-        uint64_t tmp;
-        hv_vmx_vcpu_read_vmcs(cpu->vcpuid, VMCS_CTRL_VMENTRY_CONTROLS, &tmp);
-        print_vmentry_controls(tmp);
-        hv_vmx_vcpu_read_vmcs(cpu->vcpuid, VMCS_CTRL_PIN_BASED, &tmp);
-        print_pinbased_controls(tmp);
-        hv_vmx_vcpu_read_vmcs(cpu->vcpuid, VMCS_CTRL_CPU_BASED, &tmp);
-        print_procbased1_controls(tmp);
-        hv_vmx_vcpu_read_vmcs(cpu->vcpuid, VMCS_CTRL_CPU_BASED2, &tmp);
-        print_procbased2_controls(tmp);
-#endif
-
-
-#if 0   // DEBUG
-        // TSC ?
-        hv_return_t vcpuid = cpu->vcpuid;
-        // Need to check why
-        ret |= hv_vcpu_enable_native_msr(vcpuid, MSR_GSBASE, HVF_MSR_ENABLE);
-        ret |= hv_vcpu_enable_native_msr(vcpuid, MSR_FSBASE, HVF_MSR_ENABLE);
-        ret |= hv_vcpu_enable_native_msr(vcpuid, MSR_IA32_TSC, HVF_MSR_ENABLE);
-        ret |= hv_vcpu_enable_native_msr(vcpuid, MSR_TSC_AUX, HVF_MSR_ENABLE);
-
-#endif
-		return ret;
+        return ret;
 }
 

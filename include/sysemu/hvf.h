@@ -50,6 +50,7 @@
                                               seg.flags >> 8);              \
         } while (0)                                                         \
 
+#define cap2ctrl(cap, ctrl) (((ctrl) | ((cap) & 0xffffffff)) & ((cap) >> 32))
 #define get_bit(integer, n) (int)((integer & ( 1 << n )) >> n)
 #define print_pinbased_controls(tmp)\
         printf("VMExec Pin-Based controls: 0x%llx\n", tmp); \
