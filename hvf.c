@@ -115,7 +115,7 @@ static int hvf_init(MachineState *ms)
 
 hv_return_t hvf_vcpu_exec(CPUState *cpu)
 {
-        uint64_t intr_info;
+        uint64_t intr_info, tmp;
         hv_return_t ret = 0;
 
         DPRINTF("HVF: hvf_vcpu_exec() -- ");
@@ -123,7 +123,6 @@ hv_return_t hvf_vcpu_exec(CPUState *cpu)
         qemu_mutex_unlock_iothread();
 
         hvf_update_state(cpu);
-        hvf_debug(cpu);
 
         ret = hv_vcpu_run(cpu->vcpuid);
 
@@ -133,6 +132,11 @@ hv_return_t hvf_vcpu_exec(CPUState *cpu)
         }
 
         uint64_t exit_reason = hvf_get_exit_reason(cpu->vcpuid) & 0xffff;
+        uint64_t guest_physical_address;
+        hv_vmx_vcpu_read_vmcs(cpu->vcpuid, VMCS_GUEST_PHYSICAL_ADDRESS,
+        //hv_vmx_vcpu_read_vmcs(cpu->vcpuid, VMCS_RO_GUEST_LIN_ADDR,
+                 &guest_physical_address);
+        DPRINTF("GPA: %llx -- ", guest_physical_address);
 
         switch(exit_reason) {
                 case VMX_REASON_EXC_NMI:
@@ -144,18 +148,34 @@ hv_return_t hvf_vcpu_exec(CPUState *cpu)
                         break;
                 case VMX_REASON_VMENTRY_GUEST:
                         fprintf(stderr,
-                                "%llx - Invalid guest state (%s)\n",
+                                "0x%llx - Invalid guest state (%s)\n",
                                 exit_reason & 0xffff,
                                 exit_reason_str(exit_reason & 0xffff));
-                        abort();
+                        abort(); // TODO: Remove
                         break;
-
+                case VMX_REASON_EPT_VIOLATION:
+                        fprintf(stderr,
+                                "0x%llx - EPT Violation (%s)\n",
+                                exit_reason & 0xffff,
+                                exit_reason_str(exit_reason & 0xffff));
+                        break;
+                case VMX_REASON_HLT:
+                        hv_vcpu_read_register(cpu->vcpuid, HV_X86_RAX, &tmp);
+                        fprintf(stderr,
+                                "0x%llx - HLT (RAX: %llx)\n",
+                                exit_reason & 0xffff,
+                                tmp);
+                        hv_vcpu_read_register(cpu->vcpuid, HV_X86_RIP, &tmp);
+                        hv_vcpu_write_register(cpu->vcpuid, HV_X86_RIP, tmp + 1);
+                        break;
                 default:
                         fprintf(stderr,
-                                "Unhandled exit reason (%llx: %s)\n",
+                                "Unhandled exit reason (0x%llx: %s)\n",
                                 exit_reason,
                                 exit_reason_str(exit_reason & 0xffff));
                         ret = 1;
+                        hvf_check_consistency(cpu);
+                        abort(); // TODO: Remove
         }
 
         qemu_mutex_lock_iothread();

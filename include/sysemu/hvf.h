@@ -144,7 +144,12 @@ hv_return_t hvf_vcpu_exec(CPUState *cpu);
 hv_return_t hvf_vcpu_init(CPUState *cpu);
 hv_return_t hvf_memory_init(MachineState *ms);
 hv_return_t hvf_update_state(CPUState *cpu);
-void hvf_debug(CPUState *cpu);
+
+
+// DEBUG
+hv_return_t hvf_vcpu_32bit_enforce(CPUState *cpu);
+void hvf_check_consistency(CPUState *cpu);
+void check_vm_entry(CPUState *cpu);
 
 #else
 
