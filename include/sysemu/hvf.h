@@ -147,6 +147,7 @@ hv_return_t hvf_update_state(CPUState *cpu);
 
 
 // DEBUG
+const char *interrupt_type(uint64_t val);
 void hvf_controls(CPUState *cpu);
 void hvf_check_consistency(CPUState *cpu);
 void check_vm_entry(CPUState *cpu);

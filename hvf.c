@@ -117,8 +117,6 @@ hv_return_t hvf_vcpu_exec(CPUState *cpu)
         uint64_t intr_info, tmp;
         hv_return_t ret = 0;
 
-        DPRINTF("HVF: hvf_vcpu_exec() -- ");
-
         qemu_mutex_unlock_iothread();
 
         hvf_update_state(cpu);
@@ -132,13 +130,29 @@ hv_return_t hvf_vcpu_exec(CPUState *cpu)
 
         uint64_t exit_reason = hvf_get_exit_reason(cpu->vcpuid) & 0xffff;
 
+        DPRINTF("HVF: VMExit handling:\n  ");
+
         switch(exit_reason) {
                 case VMX_REASON_EXC_NMI:
-                        DPRINTF("NMI\n");
                         hv_vmx_vcpu_read_vmcs(cpu->vcpuid,
                                                VMCS_RO_VMEXIT_IRQ_INFO,
                                                 &intr_info);
-                        DPRINTF("INTR_INFO: %llx\n", intr_info);
+                        DPRINTF("0x%llx -- ",
+                                exit_reason & 0xffff);
+                        DPRINTF("0x%llx:%s:%s:%s ",
+                                intr_info,
+                                interrupt_type(intr_info),
+                                ((intr_info >> 11) & 1) ? "VALID" : "INVALID",
+                                ((intr_info >> 31) & 1) ? "VALID" : "INVALID");
+
+                        DPRINTF("-- NMI (%s)\n",
+                                exit_reason_str(exit_reason & 0xffff));
+                        break;
+                case VMX_REASON_IRQ:
+                        DPRINTF("0x%llx - IRQ (%s)\n",
+                                exit_reason & 0xffff,
+                                exit_reason_str(exit_reason & 0xffff));
+                        abort(); // TODO: Remove
                         break;
                 case VMX_REASON_VMENTRY_GUEST:
                         DPRINTF("0x%llx - Invalid guest state (%s)\n",

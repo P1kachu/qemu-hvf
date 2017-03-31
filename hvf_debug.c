@@ -3,6 +3,22 @@
 #include "cpu.h"
 #include "sysemu/hvf.h"
 
+const char *interrupt_type(uint64_t val)
+{
+        const char *types[] = {
+           "External interrupt",
+           "Not used",
+           "Non-maskable interrupt (NMI)",
+           "Hardware exception",
+           "Not used",
+           "Not used",
+           "Software exception",
+           "Not used"
+        };
+
+        return types[(val >> 8) & 0x3];
+}
+
 void hvf_controls(CPUState *cpu)
 {
         CPUX86State *env = &X86_CPU(cpu)->env;

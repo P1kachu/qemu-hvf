@@ -222,6 +222,7 @@ hv_return_t hvf_vcpu_init(CPUState *cpu)
         ret |= hv_vmx_vcpu_write_vmcs(cpu->vcpuid, VMCS_CTRL_EXC_BITMAP, 0xffffffff);
 
         ret |= hvf_update_state(cpu);
+        hvf_controls(cpu);
 
         return ret;
 }
