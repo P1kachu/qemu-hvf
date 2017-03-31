@@ -147,7 +147,7 @@ hv_return_t hvf_update_state(CPUState *cpu);
 
 
 // DEBUG
-hv_return_t hvf_vcpu_32bit_enforce(CPUState *cpu);
+void hvf_controls(CPUState *cpu);
 void hvf_check_consistency(CPUState *cpu);
 void check_vm_entry(CPUState *cpu);
 

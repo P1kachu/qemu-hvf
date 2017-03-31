@@ -3,16 +3,11 @@
 #include "cpu.h"
 #include "sysemu/hvf.h"
 
-void hvf_check_consistency(CPUState *cpu)
+void hvf_controls(CPUState *cpu)
 {
         CPUX86State *env = &X86_CPU(cpu)->env;
-        hv_vcpuid_t vcpu = cpu->vcpuid;
+        uint64_t tmp;
 
-        printf("-- VCPU %d --\n", vcpu);
-
-        uint64_t tmp, ret;
-
-#if 0
         hv_vmx_vcpu_read_vmcs(cpu->vcpuid, VMCS_CTRL_VMENTRY_CONTROLS, &tmp);
         print_vmentry_controls(tmp);
         hv_vmx_vcpu_read_vmcs(cpu->vcpuid, VMCS_CTRL_PIN_BASED, &tmp);
@@ -21,7 +16,16 @@ void hvf_check_consistency(CPUState *cpu)
         print_procbased1_controls(tmp);
         hv_vmx_vcpu_read_vmcs(cpu->vcpuid, VMCS_CTRL_CPU_BASED2, &tmp);
         print_procbased2_controls(tmp);
-#endif
+}
+
+void hvf_check_consistency(CPUState *cpu)
+{
+        CPUX86State *env = &X86_CPU(cpu)->env;
+        hv_vcpuid_t vcpu = cpu->vcpuid;
+
+        printf("-- VCPU %d --\n", vcpu);
+
+        uint64_t tmp, ret;
 
 #define check_value(name, vmcs_field)                                       \
         printf("  " #name ":  0x%llx", tmp);                                \
