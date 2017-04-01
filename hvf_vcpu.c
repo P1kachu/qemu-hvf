@@ -13,11 +13,11 @@ static hv_return_t hvf_getput_reg(hv_vcpuid_t vcpu,
                 int set)
 {
         if (set == HVF_SET_REGS) {
-                return hv_vcpu_write_register(vcpu,
+                return hv_wr_reg(vcpu,
                                 vmcs_offset,
                                 *general_register);
         } else {
-                return hv_vcpu_read_register(vcpu,
+                return hv_rd_reg(vcpu,
                                 vmcs_offset,
                                 general_register);
         }
@@ -83,14 +83,14 @@ static hv_return_t hvf_put_sregs(CPUState *cpu)
         SET_SEG(vcpuid, TR, env->tr);
         SET_SEG(vcpuid, LDTR, env->ldt);
 
-        ret |= hv_vmx_vcpu_write_vmcs(vcpuid, VMCS_GUEST_CR0, env->cr[0]);
-        ret |= hv_vmx_vcpu_write_vmcs(vcpuid, VMCS_GUEST_CR3, env->cr[3]);
-        ret |= hv_vmx_vcpu_write_vmcs(vcpuid, VMCS_GUEST_CR4, env->cr[4]);
+        ret |= hv_wr_vmcs(vcpuid, VMCS_GUEST_CR0, env->cr[0]);
+        ret |= hv_wr_vmcs(vcpuid, VMCS_GUEST_CR3, env->cr[3]);
+        ret |= hv_wr_vmcs(vcpuid, VMCS_GUEST_CR4, env->cr[4]);
 
-        ret |= hv_vmx_vcpu_write_vmcs(vcpuid, VMCS_GUEST_IDTR_BASE, env->idt.base);
-        ret |= hv_vmx_vcpu_write_vmcs(vcpuid, VMCS_GUEST_IDTR_LIMIT, env->idt.limit);
-        ret |= hv_vmx_vcpu_write_vmcs(vcpuid, VMCS_GUEST_GDTR_BASE, env->gdt.base);
-        ret |= hv_vmx_vcpu_write_vmcs(vcpuid, VMCS_GUEST_GDTR_LIMIT, env->gdt.limit);
+        ret |= hv_wr_vmcs(vcpuid, VMCS_GUEST_IDTR_BASE, env->idt.base);
+        ret |= hv_wr_vmcs(vcpuid, VMCS_GUEST_IDTR_LIMIT, env->idt.limit);
+        ret |= hv_wr_vmcs(vcpuid, VMCS_GUEST_GDTR_BASE, env->gdt.base);
+        ret |= hv_wr_vmcs(vcpuid, VMCS_GUEST_GDTR_LIMIT, env->gdt.limit);
 
         EXIT_IF_FAIL(hvf_put_sregs);
 
@@ -119,7 +119,7 @@ static hv_return_t hvf_init_msr(CPUState *cpu)
         ret |= hv_vcpu_write_msr(vcpuid, MSR_IA32_SYSENTER_CS, env->sysenter_cs);
         ret |= hv_vcpu_write_msr(vcpuid, MSR_IA32_SYSENTER_EIP, env->sysenter_eip);
         ret |= hv_vcpu_write_msr(vcpuid, MSR_IA32_SYSENTER_ESP, env->sysenter_esp);
-        ret |= hv_vmx_vcpu_write_vmcs(vcpuid, VMCS_GUEST_IA32_EFER, env->efer);
+        ret |= hv_wr_vmcs(vcpuid, VMCS_GUEST_IA32_EFER, env->efer);
 
         ret |= hv_vcpu_write_msr(vcpuid, MSR_STAR, env->star);
         ret |= hv_vcpu_write_msr(vcpuid, MSR_CSTAR, env->cstar);
@@ -144,15 +144,7 @@ hv_return_t hvf_update_state(CPUState *cpu)
         ret = hvf_put_regs(cpu);
         ret |= hvf_put_sregs(cpu);
 #endif
-
-        uint64_t tmp;
-        hv_vcpu_read_register(cpu->vcpuid, HV_X86_RAX, &tmp);
-        printf("\033[32;1mRAX: 0x%llx\033[0m\n", tmp);
-        hv_vcpu_read_register(cpu->vcpuid, HV_X86_RCX, &tmp);
-        printf("\033[32;1mRCX: 0x%llx\033[0m\n", tmp);
-        hv_vcpu_read_register(cpu->vcpuid, HV_X86_RIP, &tmp);
-        printf("\033[32;1mRIP: 0x%llx\033[0m\n", tmp);
-
+        hvf_debug_print_regs(cpu->vcpuid);
         return ret;
 }
 
@@ -166,11 +158,11 @@ hv_return_t hvf_vcpu_init(CPUState *cpu)
 #if 0
         uint64_t tmp;
         ret |= hv_vmx_read_capability(HV_VMX_CAP_PINBASED, &tmp);
-        ret |= hv_vmx_vcpu_write_vmcs(cpu->vcpuid,
+        ret |= hv_wr_vmcs(cpu->vcpuid,
                         VMCS_CTRL_PIN_BASED,
                         cap2ctrl(tmp, 0));
         ret |= hv_vmx_read_capability(HV_VMX_CAP_PROCBASED, &tmp);
-        ret |= hv_vmx_vcpu_write_vmcs(cpu->vcpuid,
+        ret |= hv_wr_vmcs(cpu->vcpuid,
                         VMCS_CTRL_CPU_BASED,
                         cap2ctrl(tmp, CPU_BASED_HLT
                                 | CPU_BASED_MWAIT
@@ -179,33 +171,33 @@ hv_return_t hvf_vcpu_init(CPUState *cpu)
                         | CPU_BASED_SECONDARY_CTLS);
 
         ret |= hv_vmx_read_capability(HV_VMX_CAP_PROCBASED2, &tmp);
-        ret |= hv_vmx_vcpu_write_vmcs(cpu->vcpuid,
+        ret |= hv_wr_vmcs(cpu->vcpuid,
                         VMCS_CTRL_CPU_BASED2,
                         cap2ctrl(tmp, CPU_BASED2_VIRTUAL_APIC));
 
         ret |= hv_vmx_read_capability(HV_VMX_CAP_ENTRY, &tmp);
-        ret |= hv_vmx_vcpu_write_vmcs(cpu->vcpuid,
+        ret |= hv_wr_vmcs(cpu->vcpuid,
                         VMCS_CTRL_VMENTRY_CONTROLS,
                         cap2ctrl(tmp, 0));
 
-        ret |= hv_vmx_vcpu_write_vmcs(cpu->vcpuid, VMCS_CTRL_TPR_THRESHOLD, 0);
+        ret |= hv_wr_vmcs(cpu->vcpuid, VMCS_CTRL_TPR_THRESHOLD, 0);
 #endif
 
         ret = hvf_init_msr(cpu);
 
         // Debug
-        ret |= hv_vcpu_write_register(cpu->vcpuid, HV_X86_RIP, 0xfff0);
-        ret |= hv_vcpu_write_register(cpu->vcpuid, HV_X86_RAX, 0x01234567);
-        ret |= hv_vcpu_write_register(cpu->vcpuid, HV_X86_RCX, 0x89abcdef);
+        ret |= hv_wr_reg(cpu->vcpuid, HV_X86_RIP, 0xfff0);
+        ret |= hv_wr_reg(cpu->vcpuid, HV_X86_RAX, 0x01234567);
+        ret |= hv_wr_reg(cpu->vcpuid, HV_X86_RCX, 0x89abcdef);
 
 #define RESET_SEG(vcpu, seg, base, lmt, ar)                                       \
         do {                                                                    \
-                ret |= hv_vmx_vcpu_write_vmcs(vcpu, VMCS_GUEST_ ## seg ## _BASE, base);\
-                ret |= hv_vmx_vcpu_write_vmcs(vcpu, VMCS_GUEST_ ## seg ## _LIMIT, lmt);\
-                ret |= hv_vmx_vcpu_write_vmcs(vcpu, VMCS_GUEST_ ## seg ## _AR, ar);    \
+                ret |= hv_wr_vmcs(vcpu, VMCS_GUEST_ ## seg ## _BASE, base);\
+                ret |= hv_wr_vmcs(vcpu, VMCS_GUEST_ ## seg ## _LIMIT, lmt);\
+                ret |= hv_wr_vmcs(vcpu, VMCS_GUEST_ ## seg ## _AR, ar);    \
         } while (0)                                                            \
 
-        ret |= hv_vmx_vcpu_write_vmcs(cpu->vcpuid, VMCS_GUEST_CS, 0xf000);
+        ret |= hv_wr_vmcs(cpu->vcpuid, VMCS_GUEST_CS, 0xf000);
         RESET_SEG(cpu->vcpuid, CS, 0xffff0000, 0xffff, 0xc09b);
         RESET_SEG(cpu->vcpuid, DS, 0, 0xffff, 0xc093);
         RESET_SEG(cpu->vcpuid, SS, 0, 0xffff, 0xc093);
@@ -214,15 +206,15 @@ hv_return_t hvf_vcpu_init(CPUState *cpu)
         RESET_SEG(cpu->vcpuid, GS, 0, 0, 0x93);
         RESET_SEG(cpu->vcpuid, TR, 0, 0, 0x83);
         RESET_SEG(cpu->vcpuid, LDTR, 0, 0, 0x10000);
-        ret |= hv_vmx_vcpu_write_vmcs(cpu->vcpuid, VMCS_CTRL_CPU_BASED,
+        ret |= hv_wr_vmcs(cpu->vcpuid, VMCS_CTRL_CPU_BASED,
                         (CPU_BASED_HLT | CPU_BASED_CR8_LOAD | CPU_BASED_CR8_STORE));
-        ret |= hv_vmx_vcpu_write_vmcs(cpu->vcpuid, VMCS_GUEST_CR4, 0x2000);
-        ret |= hv_vmx_vcpu_write_vmcs(cpu->vcpuid, VMCS_GUEST_CR0, 0x31);
-        ret |= hv_vcpu_write_register(cpu->vcpuid, HV_X86_RFLAGS, 0x2);
-        ret |= hv_vmx_vcpu_write_vmcs(cpu->vcpuid, VMCS_CTRL_EXC_BITMAP, 0xffffffff);
+        ret |= hv_wr_vmcs(cpu->vcpuid, VMCS_GUEST_CR4, 0x2000);
+        ret |= hv_wr_vmcs(cpu->vcpuid, VMCS_GUEST_CR0, 0x31);
+        ret |= hv_wr_reg(cpu->vcpuid, HV_X86_RFLAGS, 0x2);
+        ret |= hv_wr_vmcs(cpu->vcpuid, VMCS_CTRL_EXC_BITMAP, 0xffffffff);
 
         ret |= hvf_update_state(cpu);
-        hvf_controls(cpu);
+        hvf_debug_print_vmcontrols(cpu);
 
         return ret;
 }

@@ -34,21 +34,18 @@
         do { } while (0)
 #endif
 
-#define SET_SEG(vcpu, name, seg)                                            \
-        do {                                                                \
-                ret |= hv_vmx_vcpu_write_vmcs(vcpu,                         \
-                                              VMCS_GUEST_ ## name , \
-                                              seg.selector);                    \
-                ret |= hv_vmx_vcpu_write_vmcs(vcpu,                         \
-                                              VMCS_GUEST_ ## name ## _BASE, \
-                                              seg.base);                    \
-                ret |= hv_vmx_vcpu_write_vmcs(vcpu,                         \
-                                              VMCS_GUEST_ ## name ## _LIMIT,\
-                                              seg.limit);                   \
-                ret |= hv_vmx_vcpu_write_vmcs(vcpu,                         \
-                                              VMCS_GUEST_ ## name ## _AR,   \
-                                              seg.flags >> 8);              \
-        } while (0)                                                         \
+#define hv_rd_vmcs hv_vmx_vcpu_read_vmcs
+#define hv_wr_vmcs hv_vmx_vcpu_write_vmcs
+#define hv_rd_reg  hv_vcpu_read_register
+#define hv_wr_reg  hv_vcpu_write_register
+
+#define SET_SEG(vcpu, name, seg)                                                     \
+        do {                                                                         \
+                ret |= hv_wr_vmcs(vcpu, VMCS_GUEST_ ## name, seg.selector);          \
+                ret |= hv_wr_vmcs(vcpu, VMCS_GUEST_ ## name ## _BASE, seg.base);     \
+                ret |= hv_wr_vmcs(vcpu, VMCS_GUEST_ ## name ## _LIMIT, seg.limit);   \
+                ret |= hv_wr_vmcs(vcpu, VMCS_GUEST_ ## name ## _AR, seg.flags >> 8); \
+        } while (0)
 
 #define cap2ctrl(cap, ctrl) (((ctrl) | ((cap) & 0xffffffff)) & ((cap) >> 32))
 #define get_bit(integer, n) (int)((integer & ( 1 << n )) >> n)
@@ -147,10 +144,14 @@ hv_return_t hvf_update_state(CPUState *cpu);
 
 
 // DEBUG
-const char *interrupt_type(uint64_t val);
-void hvf_controls(CPUState *cpu);
-void hvf_check_consistency(CPUState *cpu);
-void check_vm_entry(CPUState *cpu);
+const char *hvf_debug_interrupt_type(uint64_t val);
+void hvf_debug_print_regs(hv_vcpuid_t vcpu);
+void hvf_debug_print_ept(hv_vcpuid_t vcpu);
+void hvf_debug_print_vmexit(uint64_t exit_reason);
+void hvf_debug_print_nmi(uint64_t intr_info);
+void hvf_debug_print_vmcontrols(CPUState *cpu);
+void hvf_debug_check_consistency(CPUState *cpu);
+void hvf_debug_check_vm_entry(CPUState *cpu);
 
 #else
 

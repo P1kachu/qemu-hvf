@@ -3,38 +3,192 @@
 #include "cpu.h"
 #include "sysemu/hvf.h"
 
-const char *interrupt_type(uint64_t val)
+void hvf_debug_print_regs(hv_vcpuid_t vcpu)
+{
+        static uint64_t general_regs[HV_X86_REGISTERS_MAX];
+        uint64_t tmp;
+#define HV_X86_FLAGS HV_X86_RFLAGS
+
+        DPRINTF("------------------------------------------------------------\n");
+
+#define PRINT_REG(name)                                                      \
+        hv_rd_reg(vcpu, HV_X86_ ## name, &tmp);                                         \
+        if (general_regs[HV_X86_ ## name] != tmp) {                                     \
+                DPRINTF("\033[32;1m" #name ": 0x%08llx\033[0m  ", tmp); \
+        } else {                                                             \
+                DPRINTF(#name ": 0x%08llx  ", tmp);                        \
+        }                                                                    \
+        general_regs[HV_X86_ ## name] = tmp;
+
+        PRINT_REG(RAX);
+        PRINT_REG(RBX);
+        PRINT_REG(RCX);
+        PRINT_REG(RDX);
+        DPRINTF("\n");
+        PRINT_REG(RDI);
+        PRINT_REG(RSI);
+        PRINT_REG(RSP);
+        PRINT_REG(RBP);
+        DPRINTF("\n");
+        PRINT_REG(RIP);
+        PRINT_REG(FLAGS);
+        PRINT_REG(R8);
+        PRINT_REG(R9);
+        DPRINTF("\n");
+        PRINT_REG(R10);
+        PRINT_REG(R11);
+        PRINT_REG(R12);
+        PRINT_REG(R13);
+        DPRINTF("\n");
+        PRINT_REG(R14);
+        PRINT_REG(R15);
+        DPRINTF("\n");
+        DPRINTF("------------------------------------------------------------\n");
+}
+
+static const char *exit_reason_str(uint64_t reason)
+{
+#define S(V) case V: return #V
+        switch (reason) {
+                S(VMX_REASON_EXC_NMI);
+                S(VMX_REASON_IRQ);
+                S(VMX_REASON_TRIPLE_FAULT);
+                S(VMX_REASON_INIT);
+                S(VMX_REASON_SIPI);
+                S(VMX_REASON_IO_SMI);
+                S(VMX_REASON_OTHER_SMI);
+                S(VMX_REASON_IRQ_WND);
+                S(VMX_REASON_VIRTUAL_NMI_WND);
+                S(VMX_REASON_TASK);
+                S(VMX_REASON_CPUID);
+                S(VMX_REASON_GETSEC);
+                S(VMX_REASON_HLT);
+                S(VMX_REASON_INVD);
+                S(VMX_REASON_INVLPG);
+                S(VMX_REASON_RDPMC);
+                S(VMX_REASON_RDTSC);
+                S(VMX_REASON_RSM);
+                S(VMX_REASON_VMCALL);
+                S(VMX_REASON_VMCLEAR);
+                S(VMX_REASON_VMLAUNCH);
+                S(VMX_REASON_VMPTRLD);
+                S(VMX_REASON_VMPTRST);
+                S(VMX_REASON_VMREAD);
+                S(VMX_REASON_VMRESUME);
+                S(VMX_REASON_VMWRITE);
+                S(VMX_REASON_VMOFF);
+                S(VMX_REASON_VMON);
+                S(VMX_REASON_MOV_CR);
+                S(VMX_REASON_MOV_DR);
+                S(VMX_REASON_IO);
+                S(VMX_REASON_RDMSR);
+                S(VMX_REASON_WRMSR);
+                S(VMX_REASON_VMENTRY_GUEST);
+                S(VMX_REASON_VMENTRY_MSR);
+                S(VMX_REASON_MWAIT);
+                S(VMX_REASON_MTF);
+                S(VMX_REASON_MONITOR);
+                S(VMX_REASON_PAUSE);
+                S(VMX_REASON_VMENTRY_MC);
+                S(VMX_REASON_TPR_THRESHOLD);
+                S(VMX_REASON_APIC_ACCESS);
+                S(VMX_REASON_VIRTUALIZED_EOI);
+                S(VMX_REASON_GDTR_IDTR);
+                S(VMX_REASON_LDTR_TR);
+                S(VMX_REASON_EPT_VIOLATION);
+                S(VMX_REASON_EPT_MISCONFIG);
+                S(VMX_REASON_EPT_INVEPT);
+                S(VMX_REASON_RDTSCP);
+                S(VMX_REASON_VMX_TIMER_EXPIRED);
+                S(VMX_REASON_INVVPID);
+                S(VMX_REASON_WBINVD);
+                S(VMX_REASON_XSETBV);
+                S(VMX_REASON_APIC_WRITE);
+                S(VMX_REASON_RDRAND);
+                S(VMX_REASON_INVPCID);
+                S(VMX_REASON_VMFUNC);
+                S(VMX_REASON_RDSEED);
+                S(VMX_REASON_XSAVES);
+                S(VMX_REASON_XRSTORS);
+
+                default:
+                return "VMX_REASON_???";
+        }
+#undef S
+}
+
+void hvf_debug_print_vmexit(uint64_t exit_reason)
+{
+        DPRINTF("HVF: handling ");
+        DPRINTF("\033[33;1m%s\033[0m (0x%llx) exit\n",
+                        exit_reason_str(exit_reason & 0xffff),
+                        exit_reason & 0xffff);
+}
+
+void hvf_debug_print_nmi(uint64_t intr_info)
+{
+        DPRINTF("  0x%llx:%s:%s:%s\n",
+                        intr_info,
+                        hvf_debug_interrupt_type(intr_info),
+                        ((intr_info >> 11) & 1) ? "VALID" : "INVALID",
+                        ((intr_info >> 31) & 1) ? "VALID" : "INVALID");
+
+}
+
+void hvf_debug_print_ept(hv_vcpuid_t vcpu)
+{
+        uint64_t tmp;
+        hv_rd_vmcs(vcpu,
+                        VMCS_RO_EXIT_QUALIFIC,
+                        &tmp);
+        DPRINTF("  %s:%s:%s\n",
+                        (tmp & 0x1)
+                        ? "Read"
+                        : ((tmp & 0x2) == 2)
+                        ? "Write"
+                        : "Instruction Fetch",
+                        ((tmp >> 7) & 0x1)
+                        ? "Valid GLA"
+                        : "Inalid GLA",
+                        ((tmp >> 8) & 0x1)
+                        ? "PGA caused"
+                        : "Paging structure entry caused");
+
+        hv_rd_vmcs(vcpu, VMCS_GUEST_PHYSICAL_ADDRESS, &tmp);
+        DPRINTF("  GPA: %llx\n", tmp);
+}
+
+const char *hvf_debug_interrupt_type(uint64_t val)
 {
         const char *types[] = {
-           "External interrupt",
-           "Not used",
-           "Non-maskable interrupt (NMI)",
-           "Hardware exception",
-           "Not used",
-           "Not used",
-           "Software exception",
-           "Not used"
+                "External interrupt",
+                "Not used",
+                "Non-maskable interrupt (NMI)",
+                "Hardware exception",
+                "Not used",
+                "Not used",
+                "Software exception",
+                "Not used"
         };
 
         return types[(val >> 8) & 0x3];
 }
 
-void hvf_controls(CPUState *cpu)
+void hvf_debug_print_vmcontrols(CPUState *cpu)
 {
-        CPUX86State *env = &X86_CPU(cpu)->env;
         uint64_t tmp;
 
-        hv_vmx_vcpu_read_vmcs(cpu->vcpuid, VMCS_CTRL_VMENTRY_CONTROLS, &tmp);
+        hv_rd_vmcs(cpu->vcpuid, VMCS_CTRL_VMENTRY_CONTROLS, &tmp);
         print_vmentry_controls(tmp);
-        hv_vmx_vcpu_read_vmcs(cpu->vcpuid, VMCS_CTRL_PIN_BASED, &tmp);
+        hv_rd_vmcs(cpu->vcpuid, VMCS_CTRL_PIN_BASED, &tmp);
         print_pinbased_controls(tmp);
-        hv_vmx_vcpu_read_vmcs(cpu->vcpuid, VMCS_CTRL_CPU_BASED, &tmp);
+        hv_rd_vmcs(cpu->vcpuid, VMCS_CTRL_CPU_BASED, &tmp);
         print_procbased1_controls(tmp);
-        hv_vmx_vcpu_read_vmcs(cpu->vcpuid, VMCS_CTRL_CPU_BASED2, &tmp);
+        hv_rd_vmcs(cpu->vcpuid, VMCS_CTRL_CPU_BASED2, &tmp);
         print_procbased2_controls(tmp);
 }
 
-void hvf_check_consistency(CPUState *cpu)
+void hvf_debug_check_consistency(CPUState *cpu)
 {
         CPUX86State *env = &X86_CPU(cpu)->env;
         hv_vcpuid_t vcpu = cpu->vcpuid;
@@ -52,11 +206,11 @@ void hvf_check_consistency(CPUState *cpu)
         printf("\n");
 
 #define PRINT_VALUE(name, vmcs_field)                                       \
-        ret = hv_vmx_vcpu_read_vmcs(vcpu, vmcs_field, &tmp);                \
+        ret = hv_rd_vmcs(vcpu, vmcs_field, &tmp);                \
         check_value(name, vmcs_field)
 
 #define PRINT_REG(name, vmcs_field)                                         \
-        ret = hv_vcpu_read_register(vcpu, vmcs_field, &tmp);                \
+        ret = hv_rd_reg(vcpu, vmcs_field, &tmp);                \
         check_value(name, vmcs_field)
 
         PRINT_VALUE(segs[R_CS].selector,  VMCS_GUEST_CS);
@@ -133,11 +287,11 @@ void hvf_check_consistency(CPUState *cpu)
 
 }
 
-void check_vm_entry(CPUState *cpu)
+void hvf_debug_check_vm_entry(CPUState *cpu)
 {
 #define GET_AND_CHECK_VMCS(val, var) \
         var = 0;\
-        ret = hv_vmx_vcpu_read_vmcs(vcpuid, val, &var); \
+        ret = hv_rd_vmcs(vcpuid, val, &var); \
         if (ret) {printf("\033[31;1mREADING VMCS FAILED FOR " #val " (0x%x)\033[0m\n", ret); abort();}
 
 #define GET_AND_CHECK_MSR(val, var) \
@@ -186,7 +340,7 @@ void check_vm_entry(CPUState *cpu)
 
         if (load_debug_controls) {
                 GET_AND_CHECK_VMCS(VMCS_GUEST_IA32_DEBUGCTL, tmp);
-                hv_vmx_vcpu_write_vmcs(vcpuid, VMCS_GUEST_IA32_DEBUGCTL, tmp & 0b1101111111000011);
+                hv_wr_vmcs(vcpuid, VMCS_GUEST_IA32_DEBUGCTL, tmp & 0b1101111111000011);
                 GET_AND_CHECK_VMCS(VMCS_GUEST_IA32_DEBUGCTL, tmp);
                 assert(!get_bit(tmp, 2)
                                 && !get_bit(tmp, 3)
