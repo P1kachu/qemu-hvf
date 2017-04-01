@@ -198,19 +198,25 @@ hv_return_t hvf_vcpu_init(CPUState *cpu)
         } while (0)                                                            \
 
         ret |= hv_wr_vmcs(cpu->vcpuid, VMCS_GUEST_CS, 0xf000);
+
+        // Custom BIOS loads string with %ES offset
         RESET_SEG(cpu->vcpuid, CS, 0xffff0000, 0xffff, 0xc09b);
+        RESET_SEG(cpu->vcpuid, ES, 0xffff0000, 0xffff, 0xc093);
+
         RESET_SEG(cpu->vcpuid, DS, 0, 0xffff, 0xc093);
         RESET_SEG(cpu->vcpuid, SS, 0, 0xffff, 0xc093);
-        RESET_SEG(cpu->vcpuid, ES, 0, 0xffff, 0xc093);
         RESET_SEG(cpu->vcpuid, FS, 0, 0, 0x93);
         RESET_SEG(cpu->vcpuid, GS, 0, 0, 0x93);
         RESET_SEG(cpu->vcpuid, TR, 0, 0, 0x83);
         RESET_SEG(cpu->vcpuid, LDTR, 0, 0, 0x10000);
+
         ret |= hv_wr_vmcs(cpu->vcpuid, VMCS_CTRL_CPU_BASED,
                         (CPU_BASED_HLT | CPU_BASED_CR8_LOAD | CPU_BASED_CR8_STORE));
+
         ret |= hv_wr_vmcs(cpu->vcpuid, VMCS_GUEST_CR4, 0x2000);
         ret |= hv_wr_vmcs(cpu->vcpuid, VMCS_GUEST_CR0, 0x31);
         ret |= hv_wr_reg(cpu->vcpuid, HV_X86_RFLAGS, 0x2);
+
         ret |= hv_wr_vmcs(cpu->vcpuid, VMCS_CTRL_EXC_BITMAP, 0xffffffff);
 
         ret |= hvf_update_state(cpu);

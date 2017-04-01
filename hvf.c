@@ -51,6 +51,8 @@ hv_return_t hvf_handle_io(CPUState *cpu, uint64_t exit_qual, uint64_t ins_len)
         uint32_t is_immediate = (exit_qual & (1 << 6)) != 0;
         uint32_t port         = exit_qual >> 16;
 
+        // Handling missing
+
         uint64_t rip;
         hv_rd_reg(cpu->vcpuid, HV_X86_RIP, &rip);
         hv_wr_reg(cpu->vcpuid, HV_X86_RIP, rip + ins_len);
@@ -75,6 +77,7 @@ hv_return_t hvf_vcpu_exec(CPUState *cpu)
 
         exit_reason = hvf_get_exit_reason(vcpu) & 0xffff;
         hv_rd_vmcs(vcpu, VMCS_RO_VMEXIT_INSTR_LEN, &ins_len);
+        hv_rd_vmcs(vcpu, VMCS_RO_EXIT_QUALIFIC, &qualification);
 
         hvf_debug_print_vmexit(exit_reason);
 
@@ -82,8 +85,6 @@ hv_return_t hvf_vcpu_exec(CPUState *cpu)
                 case VMX_REASON_EXC_NMI:
                         hv_rd_vmcs(vcpu, VMCS_RO_VMEXIT_IRQ_INFO, &intr_info);
                         hvf_debug_print_nmi(intr_info);
-                        hv_rd_reg(vcpu, HV_X86_RIP, &tmp);     // TODO: Remove
-                        hv_wr_reg(vcpu, HV_X86_RIP, tmp + ins_len); // debug
                         break;
 
                 case VMX_REASON_EPT_VIOLATION:

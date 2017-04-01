@@ -44,6 +44,7 @@ void hvf_debug_print_regs(hv_vcpuid_t vcpu)
         PRINT_REG(R15);
         DPRINTF("\n");
         DPRINTF("------------------------------------------------------------\n");
+#undef PRINT_REG
 }
 
 static const char *exit_reason_str(uint64_t reason)
@@ -138,9 +139,7 @@ void hvf_debug_print_nmi(uint64_t intr_info)
 void hvf_debug_print_ept(hv_vcpuid_t vcpu)
 {
         uint64_t tmp;
-        hv_rd_vmcs(vcpu,
-                        VMCS_RO_EXIT_QUALIFIC,
-                        &tmp);
+        hv_rd_vmcs(vcpu, VMCS_RO_EXIT_QUALIFIC, &tmp);
         DPRINTF("  %s:%s:%s\n",
                         (tmp & 0x1)
                         ? "Read"
