@@ -7,17 +7,16 @@ void hvf_debug_print_regs(hv_vcpuid_t vcpu)
 {
         static uint64_t general_regs[HV_X86_REGISTERS_MAX];
         uint64_t tmp;
-#define HV_X86_FLAGS HV_X86_RFLAGS
 
         DPRINTF("------------------------------------------------------------\n");
 
-#define PRINT_REG(name)                                                      \
-        hv_rd_reg(vcpu, HV_X86_ ## name, &tmp);                                         \
-        if (general_regs[HV_X86_ ## name] != tmp) {                                     \
-                DPRINTF("\033[32;1m" #name ": 0x%08llx\033[0m  ", tmp); \
-        } else {                                                             \
-                DPRINTF(#name ": 0x%08llx  ", tmp);                        \
-        }                                                                    \
+#define PRINT_REG(name)                                                  \
+        hv_rd_reg(vcpu, HV_X86_ ## name, &tmp);                          \
+        if (general_regs[HV_X86_ ## name] != tmp) {                      \
+                DPRINTF("\033[32;1m%6s: 0x%08llx\033[0m  ", #name, tmp); \
+        } else {                                                         \
+                DPRINTF("%6s: 0x%08llx  ", #name, tmp);                  \
+        }                                                                \
         general_regs[HV_X86_ ## name] = tmp;
 
         PRINT_REG(RAX);
@@ -31,7 +30,7 @@ void hvf_debug_print_regs(hv_vcpuid_t vcpu)
         PRINT_REG(RBP);
         DPRINTF("\n");
         PRINT_REG(RIP);
-        PRINT_REG(FLAGS);
+        PRINT_REG(RFLAGS);
         PRINT_REG(R8);
         PRINT_REG(R9);
         DPRINTF("\n");
@@ -200,16 +199,16 @@ void hvf_debug_check_consistency(CPUState *cpu)
         printf("  " #name ":  0x%llx", tmp);                                \
         if (ret) printf("FAILED WITH %llx\n", ret);                         \
         else if (tmp != env->name)                                          \
-        printf(" \033[33;1m(should be 0x%llx)\033[0m",                  \
-                        (uint64_t) env->name);                                   \
+        printf(" \033[33;1m(should be 0x%llx)\033[0m",                      \
+                        (uint64_t) env->name);                              \
         printf("\n");
 
 #define PRINT_VALUE(name, vmcs_field)                                       \
-        ret = hv_rd_vmcs(vcpu, vmcs_field, &tmp);                \
+        ret = hv_rd_vmcs(vcpu, vmcs_field, &tmp);                           \
         check_value(name, vmcs_field)
 
 #define PRINT_REG(name, vmcs_field)                                         \
-        ret = hv_rd_reg(vcpu, vmcs_field, &tmp);                \
+        ret = hv_rd_reg(vcpu, vmcs_field, &tmp);                            \
         check_value(name, vmcs_field)
 
         PRINT_VALUE(segs[R_CS].selector,  VMCS_GUEST_CS);
