@@ -199,16 +199,16 @@ void hvf_debug_check_consistency(CPUState *cpu)
         printf("  " #name ":  0x%llx", tmp);                                \
         if (ret) printf("FAILED WITH %llx\n", ret);                         \
         else if (tmp != env->name)                                          \
-        printf(" \033[33;1m(should be 0x%llx)\033[0m",                  \
-                        (uint64_t) env->name);                                   \
+        printf(" \033[33;1m(should be 0x%llx)\033[0m",                      \
+                        (uint64_t) env->name);                              \
         printf("\n");
 
 #define PRINT_VALUE(name, vmcs_field)                                       \
-        ret = hv_rd_vmcs(vcpu, vmcs_field, &tmp);                \
+        ret = hv_rd_vmcs(vcpu, vmcs_field, &tmp);                           \
         check_value(name, vmcs_field)
 
 #define PRINT_REG(name, vmcs_field)                                         \
-        ret = hv_rd_reg(vcpu, vmcs_field, &tmp);                \
+        ret = hv_rd_reg(vcpu, vmcs_field, &tmp);                            \
         check_value(name, vmcs_field)
 
         PRINT_VALUE(segs[R_CS].selector,  VMCS_GUEST_CS);
