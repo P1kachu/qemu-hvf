@@ -202,9 +202,8 @@ hv_return_t hvf_vcpu_init(CPUState *cpu)
         // Custom BIOS loads string with %ES offset
         RESET_SEG(cpu->vcpuid, CS, 0xffff0000, 0xffff, 0xc09b);
         RESET_SEG(cpu->vcpuid, ES, 0xffff0000, 0xffff, 0xc093);
-
-        RESET_SEG(cpu->vcpuid, DS, 0, 0xffff, 0xc093);
-        RESET_SEG(cpu->vcpuid, SS, 0, 0xffff, 0xc093);
+        RESET_SEG(cpu->vcpuid, DS, 0xffff0000, 0xffff, 0xc093);
+        RESET_SEG(cpu->vcpuid, SS, 0xffff0000, 0xffff, 0xc093);
         RESET_SEG(cpu->vcpuid, FS, 0, 0, 0x93);
         RESET_SEG(cpu->vcpuid, GS, 0, 0, 0x93);
         RESET_SEG(cpu->vcpuid, TR, 0, 0, 0x83);
