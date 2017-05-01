@@ -56,26 +56,30 @@ static hv_return_t hvf_handle_io(CPUState *cpu, uint64_t exit_qual, uint64_t ins
         hv_rd_reg(cpu->vcpuid, HV_X86_RIP, &rip);
         hv_rd_reg(cpu->vcpuid, HV_X86_RAX, &rax);
 
-        uint8_t *data = (uint8_t *)rax;
+        if (!is_string && is_out) { // out dx, al
+                uint8_t data = rax;
 
-        X86CPU *x86_cpu = X86_CPU(cpu);
-        CPUX86State *env = &x86_cpu->env;
-        MemTxAttrs attrs = (MemTxAttrs) { .secure = (env->hflags & HF_SMM_MASK) != 0 };
+                X86CPU *x86_cpu = X86_CPU(cpu);
+                CPUX86State *env = &x86_cpu->env;
+                MemTxAttrs attrs = (MemTxAttrs) {
+                        .secure = (env->hflags & HF_SMM_MASK) != 0
+                };
 
-        count = 1; // TODO: Add proper handling
+                count = 1; // TODO: Add proper handling
 
-        for (int i = 0; i < count; ++i) {
-                address_space_rw(&address_space_io,
-                                port,
-                                attrs,
-                                data,
-                                access_size,
-                                is_out);
-                data += access_size;
+                for (int i = 0; i < count; ++i) {
+                        address_space_rw(&address_space_io,
+                                        port,
+                                        attrs,
+                                        &data,
+                                        access_size,
+                                        is_out);
+
+                        data += access_size;
+                }
+
+                hv_wr_reg(cpu->vcpuid, HV_X86_RIP, rip + ins_len);
         }
-
-        hv_wr_reg(cpu->vcpuid, HV_X86_RIP, rip + ins_len);
-
         return 0;
 }
 
